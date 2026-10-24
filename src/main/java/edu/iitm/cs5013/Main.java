@@ -31,6 +31,9 @@ public class Main {
             server.start();
 
             Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
+            Thread.currentThread().join();
+        } catch (InterruptedException ignored) {
+            // Server shutting down
         } catch (Exception e) {
             System.err.println("Failed to start Dashboard server: " + e.getMessage());
             e.printStackTrace();

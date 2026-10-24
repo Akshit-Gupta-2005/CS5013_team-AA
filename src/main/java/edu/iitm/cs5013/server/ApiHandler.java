@@ -28,6 +28,15 @@ public class ApiHandler implements HttpHandler {
     public ApiHandler(String sampleDataDirPath) {
         this.sampleDataDir = Paths.get(sampleDataDirPath);
         this.mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        try {
+            com.fasterxml.jackson.core.StreamReadConstraints constraints =
+                    com.fasterxml.jackson.core.StreamReadConstraints.builder()
+                            .maxStringLength(100_000_000)
+                            .build();
+            this.mapper.getFactory().setStreamReadConstraints(constraints);
+        } catch (Throwable ignored) {
+            // Older jackson or constraints not supported
+        }
     }
 
     @Override

@@ -72,6 +72,11 @@ public class CsvSensorParser {
                 );
             }
 
+            // Check if this file is a raw GNSS Logger stream (e.g. Nissan Magnite gnss_log)
+            if (isGnssLog(headerMap)) {
+                return parseGnssLog(parser, sensorType, filename);
+            }
+
             // Detect timestamp column
             String timestampCol = findColumn(headerMap, sensorType.getTimestampColumnAliases());
             // Detect value column
@@ -206,6 +211,154 @@ public class CsvSensorParser {
             }
         }
         return null;
+    }
+
+    private static boolean isGnssLog(Map<String, Integer> headerMap) {
+        if (headerMap == null) return false;
+        boolean hasDateOrTime = false;
+        boolean hasSpeedOrAccel = false;
+        for (String key : headerMap.keySet()) {
+            String norm = normalize(key);
+            if (norm.equals("phonenumber") || norm.equals("measconstellationtype") || norm.equals("timeist")) {
+                return true;
+            }
+            if (norm.equals("date") || norm.equals("time") || norm.equals("timeist")) {
+                hasDateOrTime = true;
+            }
+            if (norm.equals("speedkph") || norm.equals("speedmps") || norm.equals("accelerationmps2")) {
+                hasSpeedOrAccel = true;
+            }
+        }
+        return hasDateOrTime && hasSpeedOrAccel;
+    }
+
+    private static SensorParseResult parseGnssLog(CSVParser parser, SensorType sensorType, String filename) {
+        if (sensorType != SensorType.VEHICLE_VELOCITY && sensorType != SensorType.VEHICLE_ACCELERATION) {
+            return SensorParseResult.failure(
+                    sensorType.getId(),
+                    filename,
+                    List.of("The uploaded file is a vehicle GNSS motion log (velocity & acceleration), but the selected target is " +
+                            sensorType.getDisplayName() + ". Please upload to Vehicle Velocity or Vehicle Acceleration.")
+            );
+        }
+
+        List<SensorDataPoint> points = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+        int totalRows = 0;
+        double minValue = Double.MAX_VALUE;
+        double maxValue = -Double.MAX_VALUE;
+        long minEpoch = Long.MAX_VALUE;
+        long maxEpoch = Long.MIN_VALUE;
+
+        int dateIdx = -1;
+        int timeIdx = -1;
+        int spdKphIdx = -1;
+        int accelIdx = -1;
+        boolean detected = false;
+
+        for (CSVRecord record : parser) {
+            totalRows++;
+            int size = record.size();
+            if (size < 10) continue;
+
+            if (!detected) {
+                // Dynamically detect date index matching YYYY-MM-DD
+                for (int i = 0; i < Math.min(size, 8); i++) {
+                    String s = record.get(i).trim();
+                    if (s.matches("^\\d{4}-\\d{2}-\\d{2}$")) {
+                        dateIdx = i;
+                        break;
+                    }
+                }
+                if (dateIdx != -1 && dateIdx + 1 < size) {
+                    timeIdx = dateIdx + 1;
+                    spdKphIdx = dateIdx + 6;
+                    accelIdx = dateIdx + 7;
+                    detected = true;
+                } else {
+                    // Fallback to shifted positions in GNSS Logger export
+                    dateIdx = 2;
+                    timeIdx = 3;
+                    spdKphIdx = 8;
+                    accelIdx = 9;
+                    detected = true;
+                }
+            }
+
+            int valIdx = (sensorType == SensorType.VEHICLE_VELOCITY) ? spdKphIdx : accelIdx;
+            if (valIdx >= size || timeIdx >= size || dateIdx >= size) {
+                continue;
+            }
+
+            String dateStr = record.get(dateIdx).trim();
+            String timeStr = record.get(timeIdx).trim();
+            String rawVal = record.get(valIdx).trim();
+
+            if (dateStr.isEmpty() || timeStr.isEmpty() || rawVal.isEmpty()) {
+                continue;
+            }
+
+            String fullTimestamp = dateStr + " " + timeStr;
+            ParsedTimestamp parsedTime = parseTimestamp(fullTimestamp);
+            if (parsedTime == null) {
+                if (warnings.size() < 10) {
+                    warnings.add("Row " + (totalRows + 1) + ": unable to parse timestamp '" + fullTimestamp + "'.");
+                }
+                continue;
+            }
+
+            double val;
+            try {
+                val = Double.parseDouble(rawVal);
+                if (Double.isNaN(val) || Double.isInfinite(val)) {
+                    continue;
+                }
+            } catch (NumberFormatException e) {
+                if (warnings.size() < 10) {
+                    warnings.add("Row " + (totalRows + 1) + ": invalid numeric value '" + rawVal + "'.");
+                }
+                continue;
+            }
+
+            points.add(new SensorDataPoint(fullTimestamp, parsedTime.epochMillis, parsedTime.formatted, val));
+
+            if (val < minValue) minValue = val;
+            if (val > maxValue) maxValue = val;
+            if (parsedTime.epochMillis < minEpoch) minEpoch = parsedTime.epochMillis;
+            if (parsedTime.epochMillis > maxEpoch) maxEpoch = parsedTime.epochMillis;
+        }
+
+        if (points.isEmpty()) {
+            return SensorParseResult.failure(
+                    sensorType.getId(),
+                    filename,
+                    List.of("No valid " + sensorType.getDisplayName() + " data rows could be parsed from the GNSS log.")
+            );
+        }
+
+        points.sort(Comparator.comparingLong(SensorDataPoint::getEpochMillis));
+
+        String minFormatted = DISPLAY_FORMATTER.format(Instant.ofEpochMilli(minEpoch));
+        String maxFormatted = DISPLAY_FORMATTER.format(Instant.ofEpochMilli(maxEpoch));
+
+        return new SensorParseResult(
+                true,
+                sensorType.getId(),
+                sensorType.getDisplayName(),
+                sensorType.getUnit(),
+                filename,
+                totalRows,
+                points.size(),
+                minValue,
+                maxValue,
+                minEpoch,
+                maxEpoch,
+                minFormatted,
+                maxFormatted,
+                points,
+                List.of(),
+                warnings
+        );
     }
 
     private static String normalize(String s) {

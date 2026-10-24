@@ -161,6 +161,34 @@ async function handleFileUpload(sensorType, file) {
         if (data.success) {
             appState.datasets[sensorType] = data;
             setCardSuccess(sensorType, data);
+
+            // If a multi-stream GNSS log was uploaded to one motion card, automatically populate the counterpart
+            const otherType = sensorType === 'vehicle_velocity' ? 'vehicle_acceleration'
+                            : sensorType === 'vehicle_acceleration' ? 'vehicle_velocity' : null;
+            if (otherType && !appState.datasets[otherType] && (data.filename.toLowerCase().includes('gnss') || textContent.includes('Speed_kph'))) {
+                try {
+                    setCardLoading(otherType, file.name);
+                    const otherRes = await fetch('/api/upload', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            sensorType: otherType,
+                            filename: file.name,
+                            csvContent: textContent
+                        })
+                    });
+                    const otherData = await otherRes.json();
+                    if (otherData.success) {
+                        appState.datasets[otherType] = otherData;
+                        setCardSuccess(otherType, otherData);
+                    } else {
+                        removeFile(otherType);
+                    }
+                } catch (ignored) {
+                    removeFile(otherType);
+                }
+            }
+
             updateAllVisualizations();
         } else {
             appState.datasets[sensorType] = null;
@@ -570,8 +598,8 @@ function updateChartVelocity() {
         data: vel.dataPoints.map(p => ({ x: p.epochMillis, y: p.value, rawTs: p.rawTimestamp, fmt: p.formattedTime })),
         borderColor: SENSOR_CONFIG.vehicle_velocity.color,
         backgroundColor: SENSOR_CONFIG.vehicle_velocity.colorAlpha,
-        borderWidth: 2,
-        pointRadius: 2,
+        borderWidth: vel.dataPoints.length > 2000 ? 1.5 : 2,
+        pointRadius: vel.dataPoints.length > 2000 ? 0 : 2,
         pointHoverRadius: 5,
         fill: true,
         tension: 0.15
@@ -641,8 +669,8 @@ function updateChartAcceleration() {
         data: acc.dataPoints.map(p => ({ x: p.epochMillis, y: p.value, rawTs: p.rawTimestamp, fmt: p.formattedTime })),
         borderColor: SENSOR_CONFIG.vehicle_acceleration.color,
         backgroundColor: SENSOR_CONFIG.vehicle_acceleration.colorAlpha,
-        borderWidth: 2,
-        pointRadius: 2,
+        borderWidth: vel.dataPoints.length > 2000 ? 1.5 : 2,
+        pointRadius: vel.dataPoints.length > 2000 ? 0 : 2,
         pointHoverRadius: 5,
         tension: 0.15
     };
@@ -789,8 +817,8 @@ function updateChartHrVsVel() {
         backgroundColor: color,
         borderColor: 'white',
         borderWidth: 1,
-        pointRadius: 4,
-        pointHoverRadius: 7
+        pointRadius: match.points.length > 2000 ? 1.5 : 4,
+        pointHoverRadius: match.points.length > 2000 ? 4 : 7
     };
 
     if (appState.charts.hrVsVel) {
@@ -886,8 +914,8 @@ function updateChartHrVsAcc() {
         backgroundColor: color,
         borderColor: 'white',
         borderWidth: 1,
-        pointRadius: 4,
-        pointHoverRadius: 7
+        pointRadius: match.points.length > 2000 ? 1.5 : 4,
+        pointHoverRadius: match.points.length > 2000 ? 4 : 7
     };
 
     if (appState.charts.hrVsAcc) {
@@ -977,8 +1005,8 @@ function updateChartVelVsAcc() {
         backgroundColor: '#0d9488',
         borderColor: 'white',
         borderWidth: 1,
-        pointRadius: 4,
-        pointHoverRadius: 7
+        pointRadius: match.points.length > 2000 ? 1.5 : 4,
+        pointHoverRadius: match.points.length > 2000 ? 4 : 7
     };
 
     if (appState.charts.velVsAcc) {

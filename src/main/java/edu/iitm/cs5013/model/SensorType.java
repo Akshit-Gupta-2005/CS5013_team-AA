@@ -27,16 +27,16 @@ public enum SensorType {
             "Vehicle Velocity",
             "km/h",
             "Vehicle ground speed recorded in kilometers per hour.",
-            List.of("velocity", "speed", "speed_kmh", "vel", "velocity_kmh"),
-            List.of("timestamp", "time", "datetime", "ts", "date_time")
+            List.of("velocity", "speed", "speed_kmh", "speed_kph", "speedkph", "vel", "velocity_kmh"),
+            List.of("timestamp", "time", "time_ist", "datetime", "ts", "date_time", "date")
     ),
     VEHICLE_ACCELERATION(
             "vehicle_acceleration",
             "Vehicle Acceleration",
             "m/s²",
             "Longitudinal acceleration/deceleration recorded in meters per second squared.",
-            List.of("acceleration", "accel", "acceleration_ms2", "acc", "longitudinal_acceleration"),
-            List.of("timestamp", "time", "datetime", "ts", "date_time")
+            List.of("acceleration", "accel", "acceleration_mps2", "accel_mps2", "acc", "longitudinal_acceleration"),
+            List.of("timestamp", "time", "time_ist", "datetime", "ts", "date_time", "date")
     );
 
     private final String id;

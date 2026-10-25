@@ -96,4 +96,70 @@ public class CsvSensorParserTest {
         assertEquals(0, match.getMatchCount());
         assertTrue(match.getMessage().contains("Insufficient exact timestamp matches"));
     }
+
+    @Test
+    @DisplayName("Should successfully parse Nissan Magnite GNSS log for Vehicle Velocity")
+    void testParseNissanMagniteGnssVelocity() throws Exception {
+        java.nio.file.Path path = java.nio.file.Paths.get("Nissan Magnite", "gnss_log_2026_09_10_09_00_29.csv");
+        if (!java.nio.file.Files.exists(path)) return; // skip if running in environment without external dataset
+
+        String content = java.nio.file.Files.readString(path);
+        SensorParseResult res = CsvSensorParser.parse(content, SensorType.VEHICLE_VELOCITY, path.getFileName().toString());
+
+        assertTrue(res.isSuccess());
+        assertEquals("km/h", res.getUnit());
+        assertEquals(12818, res.getValidDataPointsCount());
+        assertEquals(0.0, res.getMinValue(), 0.001);
+        assertTrue(res.getMaxValue() > 70.0);
+    }
+
+    @Test
+    @DisplayName("Should successfully parse Nissan Magnite GNSS log for Vehicle Acceleration including negative decelerations")
+    void testParseNissanMagniteGnssAcceleration() throws Exception {
+        java.nio.file.Path path = java.nio.file.Paths.get("Nissan Magnite", "gnss_log_2026_09_10_09_00_29.csv");
+        if (!java.nio.file.Files.exists(path)) return;
+
+        String content = java.nio.file.Files.readString(path);
+        SensorParseResult res = CsvSensorParser.parse(content, SensorType.VEHICLE_ACCELERATION, path.getFileName().toString());
+
+        assertTrue(res.isSuccess());
+        assertEquals("m/s²", res.getUnit());
+        assertEquals(12817, res.getValidDataPointsCount());
+        assertTrue(res.getMinValue() < -3.0, "Deceleration must be negative");
+        assertTrue(res.getMaxValue() > 2.0, "Acceleration must be positive");
+
+        // Verify deceleration count
+        long negCount = res.getDataPoints().stream().filter(p -> p.getValue() < 0).count();
+        assertTrue(negCount > 4000, "Should have over 4000 negative acceleration records");
+    }
+
+    @Test
+    @DisplayName("Should pair Nissan Magnite GNSS Velocity and Acceleration on exact timestamps")
+    void testMatchNissanMagniteVelocityAndAcceleration() throws Exception {
+        java.nio.file.Path path = java.nio.file.Paths.get("Nissan Magnite", "gnss_log_2026_09_10_09_00_29.csv");
+        if (!java.nio.file.Files.exists(path)) return;
+
+        String content = java.nio.file.Files.readString(path);
+        SensorParseResult vel = CsvSensorParser.parse(content, SensorType.VEHICLE_VELOCITY, path.getFileName().toString());
+        SensorParseResult acc = CsvSensorParser.parse(content, SensorType.VEHICLE_ACCELERATION, path.getFileName().toString());
+
+        MatchResult match = ExactTimestampMatcher.match(vel, acc, "Vehicle Velocity", "Vehicle Acceleration");
+        assertTrue(match.isHasSufficientMatches());
+        assertEquals(12816, match.getMatchCount());
+        // Verify points have valid speed and acceleration
+        assertNotNull(match.getMatchedPoints().get(0));
+    }
+
+    @Test
+    @DisplayName("Should reject GNSS log file when uploaded to Heart Rate sensor")
+    void testRejectGnssForHeartRate() throws Exception {
+        java.nio.file.Path path = java.nio.file.Paths.get("Nissan Magnite", "gnss_log_2026_09_10_09_00_29.csv");
+        if (!java.nio.file.Files.exists(path)) return;
+
+        String content = java.nio.file.Files.readString(path);
+        SensorParseResult res = CsvSensorParser.parse(content, SensorType.SMARTWATCH_HEART_RATE, path.getFileName().toString());
+
+        assertFalse(res.isSuccess());
+        assertTrue(res.getErrors().get(0).contains("GNSS motion log"));
+    }
 }

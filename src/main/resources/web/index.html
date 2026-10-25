@@ -181,7 +181,7 @@
                     
                     <p class="card-description">Instantaneous vehicle speed from CAN-bus / GNSS telemetry.</p>
                     <div class="schema-hint">
-                        <strong>Expected columns:</strong> <code>timestamp</code>, <code>velocity</code> (or <code>speed</code>, <code>speed_kmh</code>)
+                        <strong>Supported formats:</strong> <code>timestamp, velocity</code> or raw GNSS Logger (<code>Date</code>, <code>Time_IST</code>, <code>Speed_kph</code>)
                     </div>
 
                     <div class="drop-zone" id="drop-vehicle_velocity">
@@ -222,7 +222,7 @@
                     
                     <p class="card-description">Longitudinal IMU acceleration (+) and braking (-).</p>
                     <div class="schema-hint">
-                        <strong>Expected columns:</strong> <code>timestamp</code>, <code>acceleration</code> (or <code>accel</code>, <code>acc</code>)
+                        <strong>Supported formats:</strong> <code>timestamp, acceleration</code> or raw GNSS Logger (<code>Date</code>, <code>Time_IST</code>, <code>Acceleration_mps2</code>)
                     </div>
 
                     <div class="drop-zone" id="drop-vehicle_acceleration">

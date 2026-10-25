@@ -44,6 +44,10 @@
                 <li><a href="#timeline-section">4. Combined Motion Timeline</a></li>
             </ul>
             <div class="quick-actions">
+                <button type="button" class="btn btn-primary-oct22 btn-sm" id="btnLoadOct22" title="Load 22 Oct 2026 collected field study data (Samsung Watch, Polar ECG, GNSS, HealthyPi GSR)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Load 22 Oct 2026 Field Data
+                </button>
                 <button type="button" class="btn btn-secondary btn-sm" id="btnLoadSamples" title="Load sample trip data for demonstration">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     Load Sample Trip CSVs
@@ -64,9 +68,8 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
             </div>
             <div class="banner-body">
-                <strong>Midterm Architecture & Scope:</strong>
-                This evaluation interface demonstrates sensor stream ingestion, standalone series plotting, and exploratory exact-timestamp comparisons. 
-                In accordance with Phase 3 specifications, timestamps are preserved as originally recorded without synthetic data generation, clock-drift correction, resampling, or interpolation.
+                <strong>Midterm Architecture &amp; Field Study Compatibility:</strong>
+                Supports standalone series plotting and strict exact-timestamp comparisons across both synthetic benchmark CSVs and real-world <strong>22 Oct 2026 Multi-Sensor Field Data</strong> (Samsung Watch PPG, Polar H10 Chest ECG, GNSS Velocity/Acceleration, and HealthyPi 32-Hz Electrodermal GSR).
             </div>
         </aside>
 
@@ -75,10 +78,10 @@
             <div class="section-header">
                 <div>
                     <h2>1. Sensor Data Ingestion</h2>
-                    <p class="section-desc">Upload four sensor CSV streams independently in any order. Visualizations unlock automatically upon uploading each stream.</p>
+                    <p class="section-desc">Upload sensor CSV streams independently in any order, or click "Load 22 Oct 2026 Field Data" above. Dropping a multi-stream GNSS log automatically populates Velocity, Acceleration, and Polar Chest ECG.</p>
                 </div>
                 <div class="upload-summary-pill" id="uploadCountBadge">
-                    <span id="uploadedFileCount">0</span> of 4 Streams Active
+                    <span id="uploadedFileCount">0</span> of 5 Streams Active
                 </div>
             </div>
 
@@ -96,20 +99,19 @@
                         <span class="status-badge empty" id="status-smartwatch_heart_rate">No File</span>
                     </div>
                     
-                    <p class="card-description">Wearable photoplethysmography (PPG) pulse measurement.</p>
+                    <p class="card-description">Wearable photoplethysmography (PPG) pulse measurement (e.g., Samsung Galaxy Watch).</p>
                     <div class="schema-hint">
-                        <strong>Expected columns:</strong> <code>timestamp</code>, <code>heart_rate</code> (or <code>hr</code>, <code>bpm</code>)
+                        <strong>Supported formats:</strong> <code>timestamp, heart_rate</code> or Samsung Watch (<code>watch_timestamp_ms, hr_bpm</code>)
                     </div>
 
                     <div class="drop-zone" id="drop-smartwatch_heart_rate">
                         <input type="file" id="file-smartwatch_heart_rate" accept=".csv" class="file-input">
                         <div class="drop-content">
                             <svg class="upload-cloud" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                            <span class="drop-text">Drag & drop CSV or <span class="browse-link">browse</span></span>
+                            <span class="drop-text">Drag &amp; drop CSV or <span class="browse-link">browse</span></span>
                         </div>
                     </div>
 
-                    <!-- File Details Container -->
                     <div class="file-details hidden" id="details-smartwatch_heart_rate">
                         <div class="file-info-row">
                             <span class="file-name" id="filename-smartwatch_heart_rate">-</span>
@@ -118,7 +120,7 @@
                         <div class="file-stats-grid">
                             <div class="stat-item"><span class="stat-label">Records</span><span class="stat-val" id="count-smartwatch_heart_rate">0</span></div>
                             <div class="stat-item"><span class="stat-label">Min &bull; Max</span><span class="stat-val" id="range-smartwatch_heart_rate">-</span></div>
-                            <div class="stat-item span-2"><span class="stat-label">Time Span</span><span class="stat-val text-xs" id="timespan-smartwatch_heart_rate">-</span></div>
+                            <div class="stat-item span-2"><span class="stat-label">Time Span (UTC)</span><span class="stat-val text-xs" id="timespan-smartwatch_heart_rate">-</span></div>
                         </div>
                     </div>
 
@@ -138,16 +140,16 @@
                         <span class="status-badge empty" id="status-chest_ecg_heart_rate">No File</span>
                     </div>
                     
-                    <p class="card-description">Chest-strap electrical cardiac electrode stream.</p>
+                    <p class="card-description">Chest-strap electrical cardiac electrode stream (e.g., Polar H10 BLE via GNSS log).</p>
                     <div class="schema-hint">
-                        <strong>Expected columns:</strong> <code>timestamp</code>, <code>ecg_hr</code> (or <code>heart_rate</code>, <code>bpm</code>)
+                        <strong>Supported formats:</strong> <code>timestamp, ecg_hr</code> or GNSS Logger (<code>Date, Time_IST, Polar_HR_bpm</code>)
                     </div>
 
                     <div class="drop-zone" id="drop-chest_ecg_heart_rate">
                         <input type="file" id="file-chest_ecg_heart_rate" accept=".csv" class="file-input">
                         <div class="drop-content">
                             <svg class="upload-cloud" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                            <span class="drop-text">Drag & drop CSV or <span class="browse-link">browse</span></span>
+                            <span class="drop-text">Drag &amp; drop CSV or <span class="browse-link">browse</span></span>
                         </div>
                     </div>
 
@@ -159,7 +161,7 @@
                         <div class="file-stats-grid">
                             <div class="stat-item"><span class="stat-label">Records</span><span class="stat-val" id="count-chest_ecg_heart_rate">0</span></div>
                             <div class="stat-item"><span class="stat-label">Min &bull; Max</span><span class="stat-val" id="range-chest_ecg_heart_rate">-</span></div>
-                            <div class="stat-item span-2"><span class="stat-label">Time Span</span><span class="stat-val text-xs" id="timespan-chest_ecg_heart_rate">-</span></div>
+                            <div class="stat-item span-2"><span class="stat-label">Time Span (UTC)</span><span class="stat-val text-xs" id="timespan-chest_ecg_heart_rate">-</span></div>
                         </div>
                     </div>
 
@@ -181,14 +183,14 @@
                     
                     <p class="card-description">Instantaneous vehicle speed from CAN-bus / GNSS telemetry.</p>
                     <div class="schema-hint">
-                        <strong>Supported formats:</strong> <code>timestamp, velocity</code> or raw GNSS Logger (<code>Date</code>, <code>Time_IST</code>, <code>Speed_kph</code>)
+                        <strong>Supported formats:</strong> <code>timestamp, velocity</code> or GNSS Logger (<code>Date, Time_IST, Speed_kph</code>)
                     </div>
 
                     <div class="drop-zone" id="drop-vehicle_velocity">
                         <input type="file" id="file-vehicle_velocity" accept=".csv" class="file-input">
                         <div class="drop-content">
                             <svg class="upload-cloud" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                            <span class="drop-text">Drag & drop CSV or <span class="browse-link">browse</span></span>
+                            <span class="drop-text">Drag &amp; drop CSV or <span class="browse-link">browse</span></span>
                         </div>
                     </div>
 
@@ -200,7 +202,7 @@
                         <div class="file-stats-grid">
                             <div class="stat-item"><span class="stat-label">Records</span><span class="stat-val" id="count-vehicle_velocity">0</span></div>
                             <div class="stat-item"><span class="stat-label">Min &bull; Max</span><span class="stat-val" id="range-vehicle_velocity">-</span></div>
-                            <div class="stat-item span-2"><span class="stat-label">Time Span</span><span class="stat-val text-xs" id="timespan-vehicle_velocity">-</span></div>
+                            <div class="stat-item span-2"><span class="stat-label">Time Span (UTC)</span><span class="stat-val text-xs" id="timespan-vehicle_velocity">-</span></div>
                         </div>
                     </div>
 
@@ -222,14 +224,14 @@
                     
                     <p class="card-description">Longitudinal IMU acceleration (+) and braking (-).</p>
                     <div class="schema-hint">
-                        <strong>Supported formats:</strong> <code>timestamp, acceleration</code> or raw GNSS Logger (<code>Date</code>, <code>Time_IST</code>, <code>Acceleration_mps2</code>)
+                        <strong>Supported formats:</strong> <code>timestamp, acceleration</code> or GNSS Logger (<code>Date, Time_IST, Acceleration_mps2</code>)
                     </div>
 
                     <div class="drop-zone" id="drop-vehicle_acceleration">
                         <input type="file" id="file-vehicle_acceleration" accept=".csv" class="file-input">
                         <div class="drop-content">
                             <svg class="upload-cloud" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                            <span class="drop-text">Drag & drop CSV or <span class="browse-link">browse</span></span>
+                            <span class="drop-text">Drag &amp; drop CSV or <span class="browse-link">browse</span></span>
                         </div>
                     </div>
 
@@ -241,11 +243,52 @@
                         <div class="file-stats-grid">
                             <div class="stat-item"><span class="stat-label">Records</span><span class="stat-val" id="count-vehicle_acceleration">0</span></div>
                             <div class="stat-item"><span class="stat-label">Min &bull; Max</span><span class="stat-val" id="range-vehicle_acceleration">-</span></div>
-                            <div class="stat-item span-2"><span class="stat-label">Time Span</span><span class="stat-val text-xs" id="timespan-vehicle_acceleration">-</span></div>
+                            <div class="stat-item span-2"><span class="stat-label">Time Span (UTC)</span><span class="stat-val text-xs" id="timespan-vehicle_acceleration">-</span></div>
                         </div>
                     </div>
 
                     <div class="error-msg hidden" id="error-vehicle_acceleration"></div>
+                </div>
+
+                <!-- Card 5: HealthyPi Watch GSR -->
+                <div class="upload-card" id="card-healthypi_gsr" data-sensor="healthypi_gsr">
+                    <div class="card-header">
+                        <div class="sensor-icon icon-gsr">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h4l3-9 4 18 3-9h6"/></svg>
+                        </div>
+                        <div class="card-title-group">
+                            <h3>HealthyPi Watch (GSR)</h3>
+                            <span class="unit-badge">GSR (Detrended)</span>
+                        </div>
+                        <span class="status-badge empty" id="status-healthypi_gsr">No File</span>
+                    </div>
+                    
+                    <p class="card-description">Electrodermal activity / galvanic skin response (supports multi-file 10-min chunks).</p>
+                    <div class="schema-hint">
+                        <strong>Supported formats:</strong> HealthyPi GSR (<code>timestamp_utc, ch0_detrended</code>) &mdash; select 1 or more CSVs
+                    </div>
+
+                    <div class="drop-zone" id="drop-healthypi_gsr">
+                        <input type="file" id="file-healthypi_gsr" accept=".csv" multiple class="file-input">
+                        <div class="drop-content">
+                            <svg class="upload-cloud" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            <span class="drop-text">Drop 1 or more GSR CSVs or <span class="browse-link">browse</span></span>
+                        </div>
+                    </div>
+
+                    <div class="file-details hidden" id="details-healthypi_gsr">
+                        <div class="file-info-row">
+                            <span class="file-name" id="filename-healthypi_gsr">-</span>
+                            <button type="button" class="btn-remove" id="remove-healthypi_gsr" title="Remove file">&times;</button>
+                        </div>
+                        <div class="file-stats-grid">
+                            <div class="stat-item"><span class="stat-label">1-Hz Points</span><span class="stat-val" id="count-healthypi_gsr">0</span></div>
+                            <div class="stat-item"><span class="stat-label">Min &bull; Max</span><span class="stat-val" id="range-healthypi_gsr">-</span></div>
+                            <div class="stat-item span-2"><span class="stat-label">Time Span (UTC)</span><span class="stat-val text-xs" id="timespan-healthypi_gsr">-</span></div>
+                        </div>
+                    </div>
+
+                    <div class="error-msg hidden" id="error-healthypi_gsr"></div>
                 </div>
             </div>
         </section>
@@ -267,7 +310,7 @@
                             <span class="chart-pill pill-hr">Physiology</span>
                             <h3>Heart Rate Comparison Over Time</h3>
                         </div>
-                        <p class="chart-subtitle">Smartwatch PPG vs. Chest ECG Monitor</p>
+                        <p class="chart-subtitle">Smartwatch PPG (Samsung Watch) vs. Chest ECG Monitor (Polar H10)</p>
                     </div>
                     <div class="chart-legend-custom" id="hrLegend">
                         <span class="legend-chip chip-sw hidden" id="chipSw"><span class="chip-color color-sw"></span> Smartwatch HR</span>
@@ -277,7 +320,7 @@
 
                 <div class="stream-note-banner">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                    <span><strong>Independent Clock Notice:</strong> Plotted using timestamps as recorded by each device. The streams may reflect different sampling frequencies and uncorrected hardware clock offsets.</span>
+                    <span><strong>Multi-Device Clock Alignment:</strong> Timestamps from IST/UTC logs are normalized to UTC epoch seconds while preserving original device clock characteristics.</span>
                 </div>
 
                 <div class="chart-wrapper">
@@ -324,7 +367,7 @@
                                 <span class="chart-pill pill-accel">Dynamics</span>
                                 <h3>Longitudinal Acceleration Over Time</h3>
                             </div>
-                            <p class="chart-subtitle">Acceleration (+) & Deceleration/Braking (-) in m/s²</p>
+                            <p class="chart-subtitle">Acceleration (+) &amp; Deceleration/Braking (-) in m/s²</p>
                         </div>
                         <div class="stat-pill-inline" id="accSummaryPill" style="display:none;">
                             Zero-Line Baseline Included
@@ -340,6 +383,30 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 2D: HealthyPi Watch GSR Over Time -->
+            <div class="chart-card">
+                <div class="chart-card-header">
+                    <div>
+                        <div class="chart-title-line">
+                            <span class="chart-pill pill-gsr">Electrodermal</span>
+                            <h3>HealthyPi Watch GSR (Galvanic Skin Response) Over Time</h3>
+                        </div>
+                        <p class="chart-subtitle">Detrended phasic electrodermal activity (sympathetic arousal variations across trip duration)</p>
+                    </div>
+                    <div class="stat-pill-inline" id="gsrSummaryPill" style="display:none;">
+                        1-Hz Synchronized Stream (<strong id="gsrPtsVal">-</strong> pts)
+                    </div>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="chartGsr"></canvas>
+                    <div class="empty-state" id="empty-chartGsr">
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12h4l3-9 4 18 3-9h6"/></svg>
+                        <p class="empty-title">No HealthyPi GSR Stream Uploaded</p>
+                        <p class="empty-desc">Upload one or more <code>hs_record_*_gsr.csv</code> files or click "Load 22 Oct 2026 Field Data" to inspect electrodermal activity.</p>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- SECTION 3: CROSS-SENSOR RELATIONSHIPS (EXPLORATORY) -->
@@ -347,8 +414,7 @@
             <div class="section-header">
                 <div>
                     <h2>3. Cross-Sensor Relationships (Exploratory Views)</h2>
-                    <p class="section-desc">Scatter and paired plots exploring physiological response alongside vehicle dynamics. 
-                    Strict exact-timestamp pairing applied without clock interpolation.</p>
+                    <p class="section-desc">Scatter and paired plots exploring physiological response (Heart Rate &amp; GSR) alongside vehicle dynamics. Strict exact-timestamp pairing applied.</p>
                 </div>
             </div>
 
@@ -356,9 +422,8 @@
             <div class="rule-banner">
                 <div class="rule-badge">Rule Specification</div>
                 <div class="rule-text">
-                    Observations are paired <strong>strictly on exact timestamp equality</strong> (identical recorded epoch time). 
-                    No clock-drift offsets, nearest-neighbor matching, interpolation, or resampling are applied. 
-                    These views are strictly exploratory; no statistical correlations, causal inferences, or stress predictions are made.
+                    Observations are paired <strong>strictly on exact timestamp equality</strong> (identical recorded epoch second). 
+                    No synthetic data generation, nearest-neighbor interpolation, or resampling are applied.
                 </div>
             </div>
 
@@ -369,6 +434,7 @@
                     <button type="button" class="tab-btn" data-tab="tab-hr-accel">Heart Rate vs Acceleration</button>
                     <button type="button" class="tab-btn" data-tab="tab-vel-accel">Velocity vs Acceleration</button>
                     <button type="button" class="tab-btn" data-tab="tab-hr-agreement">Sensor Agreement (Watch vs Chest)</button>
+                    <button type="button" class="tab-btn" data-tab="tab-gsr-rel">GSR (Electrodermal) Relationships</button>
                 </div>
 
                 <!-- TAB 3A: HR vs Velocity -->
@@ -456,7 +522,7 @@
                 <!-- TAB 3D: Sensor Agreement (Smartwatch vs Chest ECG) -->
                 <div class="tab-pane" id="tab-hr-agreement">
                     <div class="sub-toggle-bar">
-                        <span class="toggle-label">Dual Heart Rate Sensor Concordance:</span>
+                        <span class="toggle-label">Dual Heart Rate Sensor Concordance (Samsung Watch vs Polar Chest ECG):</span>
                         <div class="match-badge" id="matchBadgeHrAgreement">Checking matches...</div>
                     </div>
                     
@@ -481,7 +547,7 @@
                             <div class="chart-card-header">
                                 <div>
                                     <h3>Heart Rate Discrepancy Timeline</h3>
-                                    <p class="chart-subtitle">Difference (Smartwatch − Chest ECG) at Matching Seconds</p>
+                                    <p class="chart-subtitle">Difference (Smartwatch &minus; Chest ECG) at Matching Seconds</p>
                                 </div>
                             </div>
                             <div class="chart-wrapper">
@@ -494,6 +560,37 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- TAB 3E: HealthyPi GSR Relationships -->
+                <div class="tab-pane" id="tab-gsr-rel">
+                    <div class="sub-toggle-bar">
+                        <span class="toggle-label">Compare HealthyPi GSR Against:</span>
+                        <div class="toggle-group">
+                            <button type="button" class="btn-toggle active" id="btnToggleGsrVel">Vehicle Velocity</button>
+                            <button type="button" class="btn-toggle" id="btnToggleGsrAcc">Vehicle Acceleration</button>
+                            <button type="button" class="btn-toggle" id="btnToggleGsrSw">Smartwatch HR</button>
+                            <button type="button" class="btn-toggle" id="btnToggleGsrChest">Chest ECG HR</button>
+                        </div>
+                        <div class="match-badge" id="matchBadgeGsrRel">Checking matches...</div>
+                    </div>
+
+                    <div class="chart-card">
+                        <div class="chart-card-header">
+                            <div>
+                                <h3 id="titleGsrRel">HealthyPi GSR vs Vehicle Velocity</h3>
+                                <p class="chart-subtitle" id="subtitleGsrRel">X-axis: Vehicle Velocity (km/h) &bull; Y-axis: Detrended GSR</p>
+                            </div>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="chartGsrRel"></canvas>
+                            <div class="empty-state" id="empty-chartGsrRel">
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12h4l3-9 4 18 3-9h6"/></svg>
+                                <p class="empty-title">Upload HealthyPi GSR &amp; Target Stream</p>
+                                <p class="empty-desc">Requires HealthyPi Watch (GSR) CSV and the selected comparison sensor stream.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -501,8 +598,8 @@
         <section id="timeline-section" class="dashboard-section">
             <div class="section-header">
                 <div>
-                    <h2>4. Combined Motion and Heart Rate Timeline</h2>
-                    <p class="section-desc">Vertically stacked comparison plots showing physiological and vehicle dynamics streams across time with synchronized crosshair inspection.</p>
+                    <h2>4. Combined Motion, Heart Rate &amp; GSR Timeline</h2>
+                    <p class="section-desc">Vertically stacked multi-modal comparison plots showing physiological (HR &amp; GSR) and vehicle dynamics streams across trip duration.</p>
                 </div>
             </div>
 
@@ -515,7 +612,7 @@
                             <h4>Heart Rate Stream (BPM)</h4>
                         </div>
                         <div class="timeline-panel-badges" id="badges-timeline-hr">
-                            <span class="stream-pill">Smartwatch / Chest</span>
+                            <span class="stream-pill">Smartwatch / Polar Chest ECG</span>
                         </div>
                     </div>
                     <div class="timeline-chart-wrapper">
@@ -526,7 +623,26 @@
                     </div>
                 </div>
 
-                <!-- Stacked Panel 2: Velocity -->
+                <!-- Stacked Panel 2: GSR -->
+                <div class="timeline-panel" id="panel-timeline-gsr">
+                    <div class="timeline-panel-header">
+                        <div class="timeline-title-group">
+                            <span class="panel-indicator indicator-gsr"></span>
+                            <h4>HealthyPi Electrodermal Activity / GSR (Detrended)</h4>
+                        </div>
+                        <div class="timeline-panel-badges">
+                            <span class="stream-pill">Phasic Skin Conductance</span>
+                        </div>
+                    </div>
+                    <div class="timeline-chart-wrapper">
+                        <canvas id="timelineChartGsr"></canvas>
+                        <div class="empty-state mini-empty" id="empty-timelineChartGsr">
+                            <p>Upload HealthyPi Watch (GSR) CSV to populate the electrodermal timeline.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stacked Panel 3: Velocity -->
                 <div class="timeline-panel" id="panel-timeline-vel">
                     <div class="timeline-panel-header">
                         <div class="timeline-title-group">
@@ -545,7 +661,7 @@
                     </div>
                 </div>
 
-                <!-- Stacked Panel 3: Acceleration -->
+                <!-- Stacked Panel 4: Acceleration -->
                 <div class="timeline-panel" id="panel-timeline-acc">
                     <div class="timeline-panel-header">
                         <div class="timeline-title-group">
@@ -579,7 +695,7 @@
             <div class="footer-col text-right">
                 <p><strong>Team AA:</strong> Akshit Gupta (CE23B054) &bull; Ayush Shukla (CE23B057)</p>
                 <p>Faculty Stakeholder: <strong>Dr. Karthik K. Srinivasan</strong></p>
-                <p class="text-muted">Built with Java 26, Maven & Chart.js &bull; Running on localhost</p>
+                <p class="text-muted">Built with Java 26, Maven &amp; Chart.js &bull; Running on localhost</p>
             </div>
         </div>
     </footer>

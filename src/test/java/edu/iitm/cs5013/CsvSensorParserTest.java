@@ -8,6 +8,10 @@ import edu.iitm.cs5013.parser.CsvSensorParser;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 public class CsvSensorParserTest {
@@ -74,7 +78,7 @@ public class CsvSensorParserTest {
 
         MatchResult match = ExactTimestampMatcher.match(velRes, hrRes, "Vehicle Velocity", "Smartwatch Heart Rate");
         assertTrue(match.isHasSufficientMatches());
-        assertEquals(2, match.getMatchCount()); // matching at 10:00:00 and 10:00:02
+        assertEquals(2, match.getMatchCount());
         assertEquals(30.0, match.getMatchedPoints().get(0).getxValue());
         assertEquals(70.0, match.getMatchedPoints().get(0).getyValue());
     }
@@ -100,10 +104,10 @@ public class CsvSensorParserTest {
     @Test
     @DisplayName("Should successfully parse Nissan Magnite GNSS log for Vehicle Velocity")
     void testParseNissanMagniteGnssVelocity() throws Exception {
-        java.nio.file.Path path = java.nio.file.Paths.get("Nissan Magnite", "gnss_log_2026_09_10_09_00_29.csv");
-        if (!java.nio.file.Files.exists(path)) return; // skip if running in environment without external dataset
+        Path path = Paths.get("Nissan Magnite", "gnss_log_2026_09_10_09_00_29.csv");
+        if (!Files.exists(path)) return;
 
-        String content = java.nio.file.Files.readString(path);
+        String content = Files.readString(path);
         SensorParseResult res = CsvSensorParser.parse(content, SensorType.VEHICLE_VELOCITY, path.getFileName().toString());
 
         assertTrue(res.isSuccess());
@@ -116,10 +120,10 @@ public class CsvSensorParserTest {
     @Test
     @DisplayName("Should successfully parse Nissan Magnite GNSS log for Vehicle Acceleration including negative decelerations")
     void testParseNissanMagniteGnssAcceleration() throws Exception {
-        java.nio.file.Path path = java.nio.file.Paths.get("Nissan Magnite", "gnss_log_2026_09_10_09_00_29.csv");
-        if (!java.nio.file.Files.exists(path)) return;
+        Path path = Paths.get("Nissan Magnite", "gnss_log_2026_09_10_09_00_29.csv");
+        if (!Files.exists(path)) return;
 
-        String content = java.nio.file.Files.readString(path);
+        String content = Files.readString(path);
         SensorParseResult res = CsvSensorParser.parse(content, SensorType.VEHICLE_ACCELERATION, path.getFileName().toString());
 
         assertTrue(res.isSuccess());
@@ -128,7 +132,6 @@ public class CsvSensorParserTest {
         assertTrue(res.getMinValue() < -3.0, "Deceleration must be negative");
         assertTrue(res.getMaxValue() > 2.0, "Acceleration must be positive");
 
-        // Verify deceleration count
         long negCount = res.getDataPoints().stream().filter(p -> p.getValue() < 0).count();
         assertTrue(negCount > 4000, "Should have over 4000 negative acceleration records");
     }
@@ -136,30 +139,99 @@ public class CsvSensorParserTest {
     @Test
     @DisplayName("Should pair Nissan Magnite GNSS Velocity and Acceleration on exact timestamps")
     void testMatchNissanMagniteVelocityAndAcceleration() throws Exception {
-        java.nio.file.Path path = java.nio.file.Paths.get("Nissan Magnite", "gnss_log_2026_09_10_09_00_29.csv");
-        if (!java.nio.file.Files.exists(path)) return;
+        Path path = Paths.get("Nissan Magnite", "gnss_log_2026_09_10_09_00_29.csv");
+        if (!Files.exists(path)) return;
 
-        String content = java.nio.file.Files.readString(path);
+        String content = Files.readString(path);
         SensorParseResult vel = CsvSensorParser.parse(content, SensorType.VEHICLE_VELOCITY, path.getFileName().toString());
         SensorParseResult acc = CsvSensorParser.parse(content, SensorType.VEHICLE_ACCELERATION, path.getFileName().toString());
 
         MatchResult match = ExactTimestampMatcher.match(vel, acc, "Vehicle Velocity", "Vehicle Acceleration");
         assertTrue(match.isHasSufficientMatches());
         assertEquals(12816, match.getMatchCount());
-        // Verify points have valid speed and acceleration
         assertNotNull(match.getMatchedPoints().get(0));
     }
 
     @Test
-    @DisplayName("Should reject GNSS log file when uploaded to Heart Rate sensor")
+    @DisplayName("Should reject GNSS log file when uploaded to Smartwatch Heart Rate sensor")
     void testRejectGnssForHeartRate() throws Exception {
-        java.nio.file.Path path = java.nio.file.Paths.get("Nissan Magnite", "gnss_log_2026_09_10_09_00_29.csv");
-        if (!java.nio.file.Files.exists(path)) return;
+        Path path = Paths.get("Nissan Magnite", "gnss_log_2026_09_10_09_00_29.csv");
+        if (!Files.exists(path)) return;
 
-        String content = java.nio.file.Files.readString(path);
+        String content = Files.readString(path);
         SensorParseResult res = CsvSensorParser.parse(content, SensorType.SMARTWATCH_HEART_RATE, path.getFileName().toString());
 
         assertFalse(res.isSuccess());
         assertTrue(res.getErrors().get(0).contains("GNSS motion log"));
+    }
+
+    @Test
+    @DisplayName("Should parse 22 Oct 2026 GNSS + Polar log for Velocity, Acceleration, and Polar Chest ECG HR")
+    void testParseOct22GnssAndPolarLog() throws Exception {
+        Path path = Paths.get("22 Oct 2026 collected data", "22 Oct 2026", "gnss_log_2026_10_22_16_41_32.csv");
+        if (!Files.exists(path)) return;
+
+        String content = Files.readString(path);
+        SensorParseResult vel = CsvSensorParser.parse(content, SensorType.VEHICLE_VELOCITY, path.getFileName().toString());
+        SensorParseResult acc = CsvSensorParser.parse(content, SensorType.VEHICLE_ACCELERATION, path.getFileName().toString());
+        SensorParseResult polar = CsvSensorParser.parse(content, SensorType.CHEST_ECG_HEART_RATE, path.getFileName().toString());
+
+        assertTrue(vel.isSuccess());
+        assertEquals(6193, vel.getValidDataPointsCount());
+        assertTrue(vel.getMaxValue() > 75.0);
+
+        assertTrue(acc.isSuccess());
+        assertEquals(6192, acc.getValidDataPointsCount());
+        assertTrue(acc.getMinValue() < -10.0);
+        assertTrue(acc.getMaxValue() > 7.0);
+
+        assertTrue(polar.isSuccess());
+        assertEquals(6214, polar.getValidDataPointsCount());
+        assertEquals(72.0, polar.getMinValue());
+        assertEquals(104.0, polar.getMaxValue());
+    }
+
+    @Test
+    @DisplayName("Should parse 22 Oct 2026 Samsung Watch (HR and IBI) and match with Polar Chest ECG & GNSS")
+    void testParseOct22SamsungWatchAndMatch() throws Exception {
+        Path samsungPath = Paths.get("22 Oct 2026 collected data", "22 Oct 2026", "Samsung watch (HR and IBI).csv");
+        Path gnssPath = Paths.get("22 Oct 2026 collected data", "22 Oct 2026", "gnss_log_2026_10_22_16_41_32.csv");
+        if (!Files.exists(samsungPath) || !Files.exists(gnssPath)) return;
+
+        String samsungContent = Files.readString(samsungPath);
+        SensorParseResult swRes = CsvSensorParser.parse(samsungContent, SensorType.SMARTWATCH_HEART_RATE, samsungPath.getFileName().toString());
+
+        assertTrue(swRes.isSuccess());
+        assertEquals(4900, swRes.getValidDataPointsCount());
+        assertEquals(64.0, swRes.getMinValue());
+        assertEquals(99.0, swRes.getMaxValue());
+
+        String gnssContent = Files.readString(gnssPath);
+        SensorParseResult polarRes = CsvSensorParser.parse(gnssContent, SensorType.CHEST_ECG_HEART_RATE, gnssPath.getFileName().toString());
+
+        MatchResult agreement = ExactTimestampMatcher.match(polarRes, swRes, "Chest ECG", "Smartwatch HR");
+        assertTrue(agreement.isHasSufficientMatches());
+        assertEquals(4891, agreement.getMatchCount());
+    }
+
+    @Test
+    @DisplayName("Should parse 22 Oct 2026 HealthyPi Watch GSR and match exact seconds with GNSS velocity")
+    void testParseOct22HealthyPiGsrAndMatch() throws Exception {
+        Path gsrPath = Paths.get("22 Oct 2026 collected data", "22 Oct 2026", "Healthypi watch (GSR)", "hs_record_101_gsr.csv");
+        Path gnssPath = Paths.get("22 Oct 2026 collected data", "22 Oct 2026", "gnss_log_2026_10_22_16_41_32.csv");
+        if (!Files.exists(gsrPath) || !Files.exists(gnssPath)) return;
+
+        String gsrContent = Files.readString(gsrPath);
+        SensorParseResult gsrRes = CsvSensorParser.parse(gsrContent, SensorType.HEALTHYPI_GSR, gsrPath.getFileName().toString());
+
+        assertTrue(gsrRes.isSuccess());
+        assertEquals(597, gsrRes.getValidDataPointsCount());
+
+        String gnssContent = Files.readString(gnssPath);
+        SensorParseResult velRes = CsvSensorParser.parse(gnssContent, SensorType.VEHICLE_VELOCITY, gnssPath.getFileName().toString());
+
+        MatchResult match = ExactTimestampMatcher.match(velRes, gsrRes, "Vehicle Velocity", "HealthyPi GSR");
+        assertTrue(match.isHasSufficientMatches());
+        assertTrue(match.getMatchCount() >= 590);
     }
 }

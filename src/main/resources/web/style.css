@@ -940,3 +940,31 @@ body {
         text-align: left;
     }
 }
+
+
+/* 22 Oct 2026 Field Study & GSR Extensions */
+:root {
+    --color-gsr: #d97706;
+}
+
+.icon-gsr {
+    background: var(--color-gsr);
+}
+
+.pill-gsr {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.indicator-gsr {
+    background: var(--color-gsr);
+}
+
+.btn-primary-oct22 {
+    background: #059669;
+    color: white;
+}
+
+.btn-primary-oct22:hover {
+    background: #047857;
+}

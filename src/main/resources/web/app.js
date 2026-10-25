@@ -9,12 +9,14 @@ const appState = {
         smartwatch_heart_rate: null,
         chest_ecg_heart_rate: null,
         vehicle_velocity: null,
-        vehicle_acceleration: null
+        vehicle_acceleration: null,
+        healthypi_gsr: null
     },
     charts: {},
     activeSubToggles: {
         hrVel: 'sw',   // 'sw' or 'chest'
-        hrAcc: 'sw'    // 'sw' or 'chest'
+        hrAcc: 'sw',   // 'sw' or 'chest'
+        gsrRel: 'vel'  // 'vel', 'acc', 'sw', 'chest'
     }
 };
 
@@ -47,6 +49,13 @@ const SENSOR_CONFIG = {
         color: '#7c3aed',
         colorAlpha: 'rgba(124, 58, 237, 0.25)',
         pointColor: '#7c3aed'
+    },
+    healthypi_gsr: {
+        name: 'HealthyPi Watch (GSR)',
+        unit: 'GSR (Detrended)',
+        color: '#d97706',
+        colorAlpha: 'rgba(217, 119, 6, 0.22)',
+        pointColor: '#d97706'
     }
 };
 
@@ -88,7 +97,6 @@ function initUploadDropzones() {
     const sensorTypes = Object.keys(SENSOR_CONFIG);
 
     sensorTypes.forEach(sensorType => {
-        const card = document.getElementById(`card-${sensorType}`);
         const dropZone = document.getElementById(`drop-${sensorType}`);
         const fileInput = document.getElementById(`file-${sensorType}`);
         const removeBtn = document.getElementById(`remove-${sensorType}`);
@@ -116,14 +124,14 @@ function initUploadDropzones() {
             e.preventDefault();
             dropZone.classList.remove('dragover');
             if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                handleFileUpload(sensorType, e.dataTransfer.files[0]);
+                handleFileUpload(sensorType, Array.from(e.dataTransfer.files));
             }
         });
 
         // Input file change
         fileInput.addEventListener('change', (e) => {
             if (e.target.files && e.target.files.length > 0) {
-                handleFileUpload(sensorType, e.target.files[0]);
+                handleFileUpload(sensorType, Array.from(e.target.files));
             }
         });
 
@@ -137,22 +145,30 @@ function initUploadDropzones() {
     });
 }
 
-async function handleFileUpload(sensorType, file) {
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-        showCardError(sensorType, 'Invalid file type. Please upload a CSV (.csv) file.');
+async function handleFileUpload(sensorType, files) {
+    const fileList = Array.isArray(files) ? files : [files];
+    const csvFiles = fileList.filter(f => f.name.toLowerCase().endsWith('.csv'));
+    if (csvFiles.length === 0) {
+        showCardError(sensorType, 'Invalid file type. Please upload CSV (.csv) file(s).');
         return;
     }
 
-    setCardLoading(sensorType, file.name);
+    const displayFilename = csvFiles.length === 1
+        ? csvFiles[0].name
+        : `${csvFiles[0].name} (+${csvFiles.length - 1} more)`;
+
+    setCardLoading(sensorType, displayFilename);
 
     try {
-        const textContent = await readFileAsText(file);
+        const contents = await Promise.all(csvFiles.map(readFileAsText));
+        const textContent = contents.join('\n');
+
         const res = await fetch('/api/upload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 sensorType: sensorType,
-                filename: file.name,
+                filename: displayFilename,
                 csvContent: textContent
             })
         });
@@ -162,30 +178,37 @@ async function handleFileUpload(sensorType, file) {
             appState.datasets[sensorType] = data;
             setCardSuccess(sensorType, data);
 
-            // If a multi-stream GNSS log was uploaded to one motion card, automatically populate the counterpart
-            const otherType = sensorType === 'vehicle_velocity' ? 'vehicle_acceleration'
-                            : sensorType === 'vehicle_acceleration' ? 'vehicle_velocity' : null;
-            if (otherType && !appState.datasets[otherType] && (data.filename.toLowerCase().includes('gnss') || textContent.includes('Speed_kph'))) {
-                try {
-                    setCardLoading(otherType, file.name);
-                    const otherRes = await fetch('/api/upload', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            sensorType: otherType,
-                            filename: file.name,
-                            csvContent: textContent
-                        })
-                    });
-                    const otherData = await otherRes.json();
-                    if (otherData.success) {
-                        appState.datasets[otherType] = otherData;
-                        setCardSuccess(otherType, otherData);
-                    } else {
-                        removeFile(otherType);
+            // If a multi-stream GNSS+Polar log was uploaded, automatically populate counterpart motion/ECG cards
+            const isGnssMultiStream = displayFilename.toLowerCase().includes('gnss') || textContent.includes('Speed_kph');
+            if (isGnssMultiStream) {
+                const candidateTypes = ['vehicle_velocity', 'vehicle_acceleration'];
+                if (textContent.includes('Polar_HR_bpm')) {
+                    candidateTypes.push('chest_ecg_heart_rate');
+                }
+                for (const otherType of candidateTypes) {
+                    if (otherType !== sensorType && !appState.datasets[otherType]) {
+                        try {
+                            setCardLoading(otherType, displayFilename);
+                            const otherRes = await fetch('/api/upload', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    sensorType: otherType,
+                                    filename: displayFilename,
+                                    csvContent: textContent
+                                })
+                            });
+                            const otherData = await otherRes.json();
+                            if (otherData.success) {
+                                appState.datasets[otherType] = otherData;
+                                setCardSuccess(otherType, otherData);
+                            } else {
+                                removeFile(otherType);
+                            }
+                        } catch (ignored) {
+                            removeFile(otherType);
+                        }
                     }
-                } catch (ignored) {
-                    removeFile(otherType);
                 }
             }
 
@@ -361,20 +384,75 @@ function initSubToggles() {
             updateChartHrVsAcc();
         });
     }
+
+    // GSR Relationship toggles
+    const gsrToggleMap = [
+        { id: 'btnToggleGsrVel', key: 'vel' },
+        { id: 'btnToggleGsrAcc', key: 'acc' },
+        { id: 'btnToggleGsrSw', key: 'sw' },
+        { id: 'btnToggleGsrChest', key: 'chest' }
+    ];
+    gsrToggleMap.forEach(item => {
+        const el = document.getElementById(item.id);
+        if (el) {
+            el.addEventListener('click', () => {
+                gsrToggleMap.forEach(other => {
+                    const oEl = document.getElementById(other.id);
+                    if (oEl) oEl.classList.remove('active');
+                });
+                el.classList.add('active');
+                appState.activeSubToggles.gsrRel = item.key;
+                updateChartGsrRel();
+            });
+        }
+    });
 }
 
 // -------------------------------------------------------------
-// 4. Global Action Buttons (Load Samples, Reset)
+// 4. Global Action Buttons (Load 22 Oct Data, Load Samples, Reset)
 // -------------------------------------------------------------
 function initGlobalButtons() {
+    const btnLoadOct22 = document.getElementById('btnLoadOct22');
     const btnLoad = document.getElementById('btnLoadSamples');
     const btnReset = document.getElementById('btnResetAll');
+
+    if (btnLoadOct22) {
+        btnLoadOct22.addEventListener('click', async () => {
+            btnLoadOct22.disabled = true;
+            btnLoadOct22.textContent = 'Loading 22 Oct Data...';
+            try {
+                Object.keys(SENSOR_CONFIG).forEach(t => setCardLoading(t, '22 Oct 2026'));
+                const res = await fetch('/api/oct22-data');
+                const payload = await res.json();
+                if (res.ok && payload.success && payload.datasets) {
+                    Object.entries(payload.datasets).forEach(([sensorType, data]) => {
+                        if (data && data.success) {
+                            appState.datasets[sensorType] = data;
+                            setCardSuccess(sensorType, data);
+                        } else {
+                            removeFile(sensorType);
+                        }
+                    });
+                    updateAllVisualizations();
+                } else {
+                    throw new Error(payload.error || 'Could not load 22 Oct 2026 data');
+                }
+            } catch (e) {
+                alert('Failed to load 22 Oct 2026 dataset: ' + e.message);
+                Object.keys(SENSOR_CONFIG).forEach(removeFile);
+            } finally {
+                btnLoadOct22.disabled = false;
+                btnLoadOct22.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Load 22 Oct 2026 Field Data`;
+            }
+        });
+    }
 
     if (btnLoad) {
         btnLoad.addEventListener('click', async () => {
             btnLoad.disabled = true;
             btnLoad.textContent = 'Loading Samples...';
             try {
+                removeFile('healthypi_gsr');
                 const sampleFiles = [
                     { type: 'smartwatch_heart_rate', file: 'smartwatch_heart_rate.csv' },
                     { type: 'chest_ecg_heart_rate', file: 'chest_ecg_heart_rate.csv' },
@@ -425,7 +503,6 @@ function initGlobalButtons() {
 // 5. Chart Management & Rendering
 // -------------------------------------------------------------
 function initEmptyCharts() {
-    // Register Chart.js defaults
     Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     Chart.defaults.color = '#64748b';
     Chart.defaults.scale.grid.color = 'rgba(226, 232, 240, 0.7)';
@@ -435,10 +512,12 @@ function updateAllVisualizations() {
     updateChartHeartRate();
     updateChartVelocity();
     updateChartAcceleration();
+    updateChartGsr();
     updateChartHrVsVel();
     updateChartHrVsAcc();
     updateChartVelVsAcc();
     updateChartHrAgreement();
+    updateChartGsrRel();
     updateCombinedTimeline();
 }
 
@@ -501,8 +580,8 @@ function updateChartHeartRate() {
             data: sw.dataPoints.map(p => ({ x: p.epochMillis, y: p.value, rawTs: p.rawTimestamp, fmt: p.formattedTime })),
             borderColor: SENSOR_CONFIG.smartwatch_heart_rate.color,
             backgroundColor: SENSOR_CONFIG.smartwatch_heart_rate.colorAlpha,
-            borderWidth: 2,
-            pointRadius: 2,
+            borderWidth: sw.dataPoints.length > 2000 ? 1.5 : 2,
+            pointRadius: sw.dataPoints.length > 2000 ? 0 : 2,
             pointHoverRadius: 5,
             tension: 0.15
         });
@@ -517,9 +596,9 @@ function updateChartHeartRate() {
             data: chest.dataPoints.map(p => ({ x: p.epochMillis, y: p.value, rawTs: p.rawTimestamp, fmt: p.formattedTime })),
             borderColor: SENSOR_CONFIG.chest_ecg_heart_rate.color,
             backgroundColor: SENSOR_CONFIG.chest_ecg_heart_rate.colorAlpha,
-            borderWidth: 2,
-            borderDash: sw ? [4, 4] : [], // Distinguish by dash if both displayed
-            pointRadius: 2,
+            borderWidth: chest.dataPoints.length > 2000 ? 1.5 : 2,
+            borderDash: sw ? [4, 4] : [],
+            pointRadius: chest.dataPoints.length > 2000 ? 0 : 2,
             pointHoverRadius: 5,
             tension: 0.15
         });
@@ -551,14 +630,14 @@ function updateChartHeartRate() {
                 scales: {
                     x: {
                         type: 'linear',
-                        title: { display: true, text: 'Time (Original Timestamps Preserved)' },
+                        title: { display: true, text: 'Time (UTC)' },
                         ticks: {
                             callback: (val) => formatEpochTicks(val)
                         }
                     },
                     y: {
                         title: { display: true, text: 'Heart Rate (BPM)' },
-                        suggestedMin: 50,
+                        suggestedMin: 55,
                         suggestedMax: 110
                     }
                 }
@@ -629,7 +708,7 @@ function updateChartVelocity() {
                 scales: {
                     x: {
                         type: 'linear',
-                        title: { display: true, text: 'Time' },
+                        title: { display: true, text: 'Time (UTC)' },
                         ticks: { callback: (val) => formatEpochTicks(val) }
                     },
                     y: {
@@ -669,8 +748,8 @@ function updateChartAcceleration() {
         data: acc.dataPoints.map(p => ({ x: p.epochMillis, y: p.value, rawTs: p.rawTimestamp, fmt: p.formattedTime })),
         borderColor: SENSOR_CONFIG.vehicle_acceleration.color,
         backgroundColor: SENSOR_CONFIG.vehicle_acceleration.colorAlpha,
-        borderWidth: vel.dataPoints.length > 2000 ? 1.5 : 2,
-        pointRadius: vel.dataPoints.length > 2000 ? 0 : 2,
+        borderWidth: acc.dataPoints.length > 2000 ? 1.5 : 2,
+        pointRadius: acc.dataPoints.length > 2000 ? 0 : 2,
         pointHoverRadius: 5,
         tension: 0.15
     };
@@ -699,13 +778,89 @@ function updateChartAcceleration() {
                 scales: {
                     x: {
                         type: 'linear',
-                        title: { display: true, text: 'Time' },
+                        title: { display: true, text: 'Time (UTC)' },
                         ticks: { callback: (val) => formatEpochTicks(val) }
                     },
                     y: {
                         title: { display: true, text: 'Acceleration (m/s²)' },
                         grid: {
-                            // Highlight zero line
+                            color: (ctx) => ctx.tick.value === 0 ? '#334155' : 'rgba(226, 232, 240, 0.7)',
+                            lineWidth: (ctx) => ctx.tick.value === 0 ? 2 : 1
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+// -------------------------------------------------------------
+// Chart 2D: HealthyPi Watch GSR Over Time
+// -------------------------------------------------------------
+function updateChartGsr() {
+    const gsr = appState.datasets.healthypi_gsr;
+    const canvas = document.getElementById('chartGsr');
+    const summaryPill = document.getElementById('gsrSummaryPill');
+    const ptsSpan = document.getElementById('gsrPtsVal');
+    if (!canvas) return;
+
+    if (!gsr) {
+        toggleEmptyState('chartGsr', true);
+        if (summaryPill) summaryPill.style.display = 'none';
+        if (appState.charts.gsr) {
+            appState.charts.gsr.destroy();
+            appState.charts.gsr = null;
+        }
+        return;
+    }
+
+    toggleEmptyState('chartGsr', false);
+    if (summaryPill && ptsSpan) {
+        summaryPill.style.display = 'block';
+        ptsSpan.textContent = gsr.validDataPointsCount.toLocaleString();
+    }
+
+    const dataset = {
+        label: 'Detrended GSR (Electrodermal Activity)',
+        data: gsr.dataPoints.map(p => ({ x: p.epochMillis, y: p.value, rawTs: p.rawTimestamp, fmt: p.formattedTime })),
+        borderColor: SENSOR_CONFIG.healthypi_gsr.color,
+        backgroundColor: SENSOR_CONFIG.healthypi_gsr.colorAlpha,
+        borderWidth: gsr.dataPoints.length > 2000 ? 1.4 : 2,
+        pointRadius: gsr.dataPoints.length > 2000 ? 0 : 2,
+        pointHoverRadius: 5,
+        tension: 0.12
+    };
+
+    if (appState.charts.gsr) {
+        appState.charts.gsr.data.datasets = [dataset];
+        appState.charts.gsr.update();
+    } else {
+        appState.charts.gsr = new Chart(canvas, {
+            type: 'line',
+            data: { datasets: [dataset] },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 300 },
+                interaction: { mode: 'nearest', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => items.length ? items[0].raw.fmt : '',
+                            label: (item) => ` Detrended GSR: ${item.parsed.y.toFixed(2)}`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: { display: true, text: 'Time (UTC)' },
+                        ticks: { callback: (val) => formatEpochTicks(val) }
+                    },
+                    y: {
+                        title: { display: true, text: 'Detrended GSR (ADC)' },
+                        grid: {
                             color: (ctx) => ctx.tick.value === 0 ? '#334155' : 'rgba(226, 232, 240, 0.7)',
                             lineWidth: (ctx) => ctx.tick.value === 0 ? 2 : 1
                         }
@@ -785,7 +940,6 @@ function updateChartHrVsVel() {
         return;
     }
 
-    // Exact Match Pairing: X = Velocity, Y = Heart Rate
     const match = exactMatchStreams(vel, hr);
 
     if (!match.sufficient) {
@@ -817,7 +971,7 @@ function updateChartHrVsVel() {
         backgroundColor: color,
         borderColor: 'white',
         borderWidth: 1,
-        pointRadius: match.points.length > 2000 ? 1.5 : 4,
+        pointRadius: match.points.length > 2000 ? 1.8 : 4,
         pointHoverRadius: match.points.length > 2000 ? 4 : 7
     };
 
@@ -882,7 +1036,6 @@ function updateChartHrVsAcc() {
         return;
     }
 
-    // Exact Match Pairing: X = Acceleration, Y = Heart Rate
     const match = exactMatchStreams(acc, hr);
 
     if (!match.sufficient) {
@@ -914,7 +1067,7 @@ function updateChartHrVsAcc() {
         backgroundColor: color,
         borderColor: 'white',
         borderWidth: 1,
-        pointRadius: match.points.length > 2000 ? 1.5 : 4,
+        pointRadius: match.points.length > 2000 ? 1.8 : 4,
         pointHoverRadius: match.points.length > 2000 ? 4 : 7
     };
 
@@ -1005,7 +1158,7 @@ function updateChartVelVsAcc() {
         backgroundColor: '#0d9488',
         borderColor: 'white',
         borderWidth: 1,
-        pointRadius: match.points.length > 2000 ? 1.5 : 4,
+        pointRadius: match.points.length > 2000 ? 1.8 : 4,
         pointHoverRadius: match.points.length > 2000 ? 4 : 7
     };
 
@@ -1074,7 +1227,6 @@ function updateChartHrAgreement() {
         return;
     }
 
-    // Exact matching between Chest ECG (X) and Smartwatch (Y)
     const match = exactMatchStreams(chest, sw);
 
     if (!match.sufficient) {
@@ -1102,14 +1254,13 @@ function updateChartHrAgreement() {
         badgeEl.textContent = `${match.count.toLocaleString()} synchronized seconds`;
     }
 
-    // 1. Scatter Plot: Chest (X) vs Smartwatch (Y)
     const scatterDataset = {
         label: 'Heart Rate Agreement',
         data: match.points.map(pt => ({ x: pt.x, y: pt.y, time: pt.formattedTime })),
         backgroundColor: '#4f46e5',
         borderColor: 'white',
         borderWidth: 1,
-        pointRadius: 4
+        pointRadius: match.points.length > 2000 ? 2 : 4
     };
 
     if (appState.charts.hrScatterAgree) {
@@ -1139,14 +1290,13 @@ function updateChartHrAgreement() {
         });
     }
 
-    // 2. Difference Timeline: (Watch - Chest) vs Time
     const diffDataset = {
         label: 'Δ HR (Smartwatch − Chest ECG)',
         data: match.points.map(pt => ({ x: pt.epochMillis, y: pt.y - pt.x, time: pt.formattedTime })),
         borderColor: '#db2777',
         backgroundColor: 'rgba(219, 39, 119, 0.2)',
-        borderWidth: 2,
-        pointRadius: 2,
+        borderWidth: match.points.length > 2000 ? 1.5 : 2,
+        pointRadius: match.points.length > 2000 ? 0 : 2,
         tension: 0.1
     };
 
@@ -1173,7 +1323,7 @@ function updateChartHrAgreement() {
                 scales: {
                     x: {
                         type: 'linear',
-                        title: { display: true, text: 'Time' },
+                        title: { display: true, text: 'Time (UTC)' },
                         ticks: { callback: (val) => formatEpochTicks(val) }
                     },
                     y: {
@@ -1190,19 +1340,121 @@ function updateChartHrAgreement() {
 }
 
 // -------------------------------------------------------------
-// Section 4: Combined Motion and Heart Rate Timeline
+// Chart 3E: HealthyPi GSR vs Motion / Heart Rate Scatter
+// -------------------------------------------------------------
+function updateChartGsrRel() {
+    const gsr = appState.datasets.healthypi_gsr;
+    const mode = appState.activeSubToggles.gsrRel;
+    const titleEl = document.getElementById('titleGsrRel');
+    const subEl = document.getElementById('subtitleGsrRel');
+    const badgeEl = document.getElementById('matchBadgeGsrRel');
+    const canvas = document.getElementById('chartGsrRel');
+    if (!canvas) return;
+
+    const targetMap = {
+        vel: { ds: appState.datasets.vehicle_velocity, label: 'Vehicle Velocity', unit: 'km/h', color: '#d97706' },
+        acc: { ds: appState.datasets.vehicle_acceleration, label: 'Vehicle Acceleration', unit: 'm/s²', color: '#7c3aed' },
+        sw: { ds: appState.datasets.smartwatch_heart_rate, label: 'Smartwatch Heart Rate', unit: 'BPM', color: '#0284c7' },
+        chest: { ds: appState.datasets.chest_ecg_heart_rate, label: 'Chest ECG Heart Rate', unit: 'BPM', color: '#e11d48' }
+    };
+
+    const target = targetMap[mode] || targetMap.vel;
+    if (titleEl) titleEl.textContent = `HealthyPi GSR vs ${target.label}`;
+    if (subEl) subEl.textContent = `X-axis: ${target.label} (${target.unit}) • Y-axis: Detrended GSR`;
+
+    if (!gsr || !target.ds) {
+        const missing = !gsr && !target.ds ? `HealthyPi GSR and ${target.label}` : (!gsr ? 'HealthyPi Watch (GSR)' : target.label);
+        toggleEmptyState('chartGsrRel', true, 'Missing Data Stream(s)', `Please upload ${missing} to explore this relationship.`);
+        if (badgeEl) {
+            badgeEl.className = 'match-badge';
+            badgeEl.textContent = 'Awaiting file uploads';
+        }
+        if (appState.charts.gsrRel) {
+            appState.charts.gsrRel.destroy();
+            appState.charts.gsrRel = null;
+        }
+        return;
+    }
+
+    const match = exactMatchStreams(target.ds, gsr);
+
+    if (!match.sufficient) {
+        toggleEmptyState('chartGsrRel', true, 'Insufficient exact timestamp matches to plot this relationship.',
+            '0 exact timestamp matches found between recorded timestamps.');
+        if (badgeEl) {
+            badgeEl.className = 'match-badge unmatched';
+            badgeEl.textContent = '0 exact matches';
+        }
+        if (appState.charts.gsrRel) {
+            appState.charts.gsrRel.destroy();
+            appState.charts.gsrRel = null;
+        }
+        return;
+    }
+
+    toggleEmptyState('chartGsrRel', false);
+    if (badgeEl) {
+        badgeEl.className = 'match-badge matched';
+        badgeEl.textContent = `${match.count.toLocaleString()} exact matches paired`;
+    }
+
+    const dataset = {
+        label: `GSR vs ${target.label}`,
+        data: match.points.map(pt => ({ x: pt.x, y: pt.y, time: pt.formattedTime })),
+        backgroundColor: target.color,
+        borderColor: 'white',
+        borderWidth: 1,
+        pointRadius: match.points.length > 2000 ? 1.8 : 4,
+        pointHoverRadius: match.points.length > 2000 ? 4 : 7
+    };
+
+    if (appState.charts.gsrRel) {
+        appState.charts.gsrRel.data.datasets = [dataset];
+        appState.charts.gsrRel.options.scales.x.title.text = `${target.label} (${target.unit})`;
+        appState.charts.gsrRel.update();
+    } else {
+        appState.charts.gsrRel = new Chart(canvas, {
+            type: 'scatter',
+            data: { datasets: [dataset] },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 300 },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (item) => ` ${target.label}: ${item.parsed.x.toFixed(2)} ${target.unit} | GSR: ${item.parsed.y.toFixed(2)} (${item.raw.time})`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: `${target.label} (${target.unit})` }
+                    },
+                    y: {
+                        title: { display: true, text: 'Detrended GSR (ADC)' }
+                    }
+                }
+            }
+        });
+    }
+}
+
+// -------------------------------------------------------------
+// Section 4: Combined Motion, Heart Rate & GSR Timeline
 // -------------------------------------------------------------
 function updateCombinedTimeline() {
     const sw = appState.datasets.smartwatch_heart_rate;
     const chest = appState.datasets.chest_ecg_heart_rate;
+    const gsr = appState.datasets.healthypi_gsr;
     const vel = appState.datasets.vehicle_velocity;
     const acc = appState.datasets.vehicle_acceleration;
 
-    // Calculate common time bounds across available streams
     let minEpoch = Infinity;
     let maxEpoch = -Infinity;
 
-    [sw, chest, vel, acc].forEach(ds => {
+    [sw, chest, gsr, vel, acc].forEach(ds => {
         if (ds && ds.minEpochMillis !== null) {
             if (ds.minEpochMillis < minEpoch) minEpoch = ds.minEpochMillis;
             if (ds.maxEpochMillis > maxEpoch) maxEpoch = ds.maxEpochMillis;
@@ -1212,13 +1464,9 @@ function updateCombinedTimeline() {
     const hasAnyTime = minEpoch !== Infinity && maxEpoch !== -Infinity;
     const commonXScale = hasAnyTime ? { min: minEpoch, max: maxEpoch } : {};
 
-    // 1. Panel 1: Heart Rate
     updateTimelinePanelHr(sw, chest, commonXScale);
-
-    // 2. Panel 2: Velocity
+    updateTimelinePanelGsr(gsr, commonXScale);
     updateTimelinePanelVel(vel, commonXScale);
-
-    // 3. Panel 3: Acceleration
     updateTimelinePanelAcc(acc, commonXScale);
 }
 
@@ -1243,7 +1491,7 @@ function updateTimelinePanelHr(sw, chest, commonXScale) {
             label: 'Smartwatch HR',
             data: sw.dataPoints.map(p => ({ x: p.epochMillis, y: p.value, fmt: p.formattedTime })),
             borderColor: SENSOR_CONFIG.smartwatch_heart_rate.color,
-            borderWidth: 1.8,
+            borderWidth: 1.6,
             pointRadius: 0,
             pointHoverRadius: 4,
             tension: 0.1
@@ -1254,7 +1502,7 @@ function updateTimelinePanelHr(sw, chest, commonXScale) {
             label: 'Chest ECG HR',
             data: chest.dataPoints.map(p => ({ x: p.epochMillis, y: p.value, fmt: p.formattedTime })),
             borderColor: SENSOR_CONFIG.chest_ecg_heart_rate.color,
-            borderWidth: 1.8,
+            borderWidth: 1.6,
             borderDash: sw ? [4, 4] : [],
             pointRadius: 0,
             pointHoverRadius: 4,
@@ -1297,8 +1545,75 @@ function updateTimelinePanelHr(sw, chest, commonXScale) {
                     },
                     y: {
                         title: { display: true, text: 'BPM' },
-                        suggestedMin: 50,
+                        suggestedMin: 55,
                         suggestedMax: 110
+                    }
+                }
+            }
+        });
+    }
+}
+
+function updateTimelinePanelGsr(gsr, commonXScale) {
+    const canvas = document.getElementById('timelineChartGsr');
+    if (!canvas) return;
+
+    if (!gsr) {
+        toggleEmptyState('timelineChartGsr', true);
+        if (appState.charts.timelineGsr) {
+            appState.charts.timelineGsr.destroy();
+            appState.charts.timelineGsr = null;
+        }
+        return;
+    }
+
+    toggleEmptyState('timelineChartGsr', false);
+    const dataset = {
+        label: 'Detrended GSR',
+        data: gsr.dataPoints.map(p => ({ x: p.epochMillis, y: p.value, fmt: p.formattedTime })),
+        borderColor: SENSOR_CONFIG.healthypi_gsr.color,
+        backgroundColor: SENSOR_CONFIG.healthypi_gsr.colorAlpha,
+        borderWidth: 1.6,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        tension: 0.1
+    };
+
+    if (appState.charts.timelineGsr) {
+        appState.charts.timelineGsr.data.datasets = [dataset];
+        if (commonXScale.min !== undefined) {
+            appState.charts.timelineGsr.options.scales.x.min = commonXScale.min;
+            appState.charts.timelineGsr.options.scales.x.max = commonXScale.max;
+        }
+        appState.charts.timelineGsr.update();
+    } else {
+        appState.charts.timelineGsr = new Chart(canvas, {
+            type: 'line',
+            data: { datasets: [dataset] },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 200 },
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => items.length ? items[0].raw.fmt : '',
+                            label: (item) => ` Detrended GSR: ${item.parsed.y.toFixed(2)}`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        min: commonXScale.min,
+                        max: commonXScale.max,
+                        ticks: { display: false },
+                        grid: { drawTicks: false }
+                    },
+                    y: {
+                        title: { display: true, text: 'GSR' }
                     }
                 }
             }
@@ -1326,7 +1641,7 @@ function updateTimelinePanelVel(vel, commonXScale) {
         borderColor: SENSOR_CONFIG.vehicle_velocity.color,
         backgroundColor: SENSOR_CONFIG.vehicle_velocity.colorAlpha,
         fill: true,
-        borderWidth: 1.8,
+        borderWidth: 1.6,
         pointRadius: 0,
         pointHoverRadius: 4,
         tension: 0.1
@@ -1393,7 +1708,7 @@ function updateTimelinePanelAcc(acc, commonXScale) {
         label: 'Acceleration',
         data: acc.dataPoints.map(p => ({ x: p.epochMillis, y: p.value, fmt: p.formattedTime })),
         borderColor: SENSOR_CONFIG.vehicle_acceleration.color,
-        borderWidth: 1.8,
+        borderWidth: 1.6,
         pointRadius: 0,
         pointHoverRadius: 4,
         tension: 0.1
@@ -1429,7 +1744,7 @@ function updateTimelinePanelAcc(acc, commonXScale) {
                         type: 'linear',
                         min: commonXScale.min,
                         max: commonXScale.max,
-                        title: { display: true, text: 'Trip Timeline' },
+                        title: { display: true, text: 'Trip Timeline (UTC)' },
                         ticks: { callback: (val) => formatEpochTicks(val) }
                     },
                     y: {
@@ -1459,7 +1774,6 @@ function formatEpochTicks(epochMillis) {
 
 function formatShortTime(formattedStr) {
     if (!formattedStr) return '-';
-    // e.g. "2026-10-11 14:30:00.000" -> "14:30:00"
     const parts = formattedStr.split(' ');
     if (parts.length > 1) {
         return parts[1].split('.')[0];

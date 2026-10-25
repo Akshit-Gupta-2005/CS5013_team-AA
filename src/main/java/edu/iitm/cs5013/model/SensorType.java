@@ -11,16 +11,16 @@ public enum SensorType {
             "Smartwatch Heart Rate",
             "BPM",
             "Driver physiological heart rate recorded via wearable smartwatch.",
-            List.of("heart_rate", "hr", "heartrate", "bpm", "pulse"),
-            List.of("timestamp", "time", "datetime", "ts", "date_time")
+            List.of("heart_rate", "hr_bpm", "hr", "heartrate", "bpm", "pulse"),
+            List.of("timestamp", "watch_timestamp_ms", "phone_received_ms", "time", "datetime", "ts", "date_time")
     ),
     CHEST_ECG_HEART_RATE(
             "chest_ecg_heart_rate",
             "Chest ECG Monitor",
             "BPM",
             "ECG-derived heart rate recorded via dedicated chest strap monitor.",
-            List.of("heart_rate", "ecg_hr", "hr", "heartrate", "bpm", "ecg_bpm"),
-            List.of("timestamp", "time", "datetime", "ts", "date_time")
+            List.of("heart_rate", "ecg_hr", "polar_hr_bpm", "hr", "heartrate", "bpm", "ecg_bpm"),
+            List.of("timestamp", "time", "time_ist", "datetime", "ts", "date_time", "date")
     ),
     VEHICLE_VELOCITY(
             "vehicle_velocity",
@@ -37,6 +37,14 @@ public enum SensorType {
             "Longitudinal acceleration/deceleration recorded in meters per second squared.",
             List.of("acceleration", "accel", "acceleration_mps2", "accel_mps2", "acc", "longitudinal_acceleration"),
             List.of("timestamp", "time", "time_ist", "datetime", "ts", "date_time", "date")
+    ),
+    HEALTHYPI_GSR(
+            "healthypi_gsr",
+            "HealthyPi Watch (GSR)",
+            "GSR (Detrended)",
+            "Electrodermal activity / galvanic skin response recorded via HealthyPi wearable.",
+            List.of("ch0_detrended", "gsr", "eda", "ch0", "skin_conductance"),
+            List.of("timestamp_utc", "timestamp", "time", "datetime", "ts", "t_ms")
     );
 
     private final String id;

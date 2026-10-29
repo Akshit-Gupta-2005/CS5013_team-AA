@@ -67,6 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSubToggles();
     initGlobalButtons();
     initEmptyCharts();
+    initExportSystem();
 });
 
 // -------------------------------------------------------------
@@ -1780,3 +1781,486 @@ function formatShortTime(formattedStr) {
     }
     return formattedStr;
 }
+
+// -------------------------------------------------------------
+// 10. Processed Data Export System
+// -------------------------------------------------------------
+
+function initExportSystem() {
+    const btnOpen = document.getElementById('btnOpenExportModal');
+    const btnCloseTop = document.getElementById('btnCloseExportModal');
+    const btnCloseBottom = document.getElementById('btnCloseExportModalBottom');
+    const backdrop = document.getElementById('exportModalBackdrop');
+
+    if (btnOpen) btnOpen.addEventListener('click', openExportModal);
+    if (btnCloseTop) btnCloseTop.addEventListener('click', closeExportModal);
+    if (btnCloseBottom) btnCloseBottom.addEventListener('click', closeExportModal);
+
+    if (backdrop) {
+        backdrop.addEventListener('click', (e) => {
+            if (e.target === backdrop) closeExportModal();
+        });
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && backdrop && !backdrop.classList.contains('hidden')) {
+            closeExportModal();
+        }
+    });
+
+    // Action button listeners
+    const btnMaster = document.getElementById('btnExportMasterCsv');
+    if (btnMaster) btnMaster.addEventListener('click', () => exportMasterCsv());
+
+    const btnAllIndiv = document.getElementById('btnExportAllIndividual');
+    if (btnAllIndiv) btnAllIndiv.addEventListener('click', () => exportAllIndividualCsvs());
+
+    const btnAllMatched = document.getElementById('btnExportAllMatched');
+    if (btnAllMatched) btnAllMatched.addEventListener('click', () => exportAllMatchedCsvs());
+
+    const btnJson = document.getElementById('btnExportJsonBundle');
+    if (btnJson) btnJson.addEventListener('click', () => exportJsonBundle());
+
+    const btnBatch = document.getElementById('btnExportBatchAll');
+    if (btnBatch) btnBatch.addEventListener('click', () => exportBatchAll());
+
+    // Individual sensor chips
+    Object.keys(SENSOR_CONFIG).forEach(sensorType => {
+        const chip = document.getElementById(`chipExp-${sensorType}`);
+        if (chip) {
+            chip.addEventListener('click', () => {
+                if (appState.datasets[sensorType]) {
+                    exportSensorCsv(sensorType);
+                } else {
+                    alert(`No processed data available for ${SENSOR_CONFIG[sensorType].name}. Please upload or load a dataset first.`);
+                }
+            });
+        }
+    });
+
+    // Cross-sensor relationship chips
+    ['hr_vel', 'hr_acc', 'vel_acc', 'hr_agreement', 'gsr_rel'].forEach(relType => {
+        const chip = document.getElementById(`chipExpRel-${relType}`);
+        if (chip) {
+            chip.addEventListener('click', () => {
+                const res = generateMatchedCsv(relType);
+                if (res) {
+                    downloadBlob(res.filename, res.csv);
+                } else {
+                    alert('Cannot export relationship: required sensor streams are not loaded or have 0 exact timestamp matches.');
+                }
+            });
+        }
+    });
+}
+
+function openExportModal() {
+    const backdrop = document.getElementById('exportModalBackdrop');
+    if (!backdrop) return;
+
+    updateExportModalStatus();
+    backdrop.classList.remove('hidden');
+}
+
+function closeExportModal() {
+    const backdrop = document.getElementById('exportModalBackdrop');
+    if (backdrop) backdrop.classList.add('hidden');
+}
+
+function updateExportModalStatus() {
+    const activeSensors = Object.entries(appState.datasets).filter(([_, d]) => d && d.success);
+    const totalPoints = activeSensors.reduce((acc, [_, d]) => acc + (d.validDataPointsCount || 0), 0);
+
+    const statusText = document.getElementById('exportStatusText');
+    if (statusText) {
+        if (activeSensors.length === 0) {
+            statusText.textContent = 'No sensor datasets currently loaded. Upload CSV files or click "Load 22 Oct 2026 Field Data" above.';
+        } else {
+            statusText.textContent = `${activeSensors.length} of ${Object.keys(SENSOR_CONFIG).length} streams active (${totalPoints.toLocaleString()} total processed observations available for export).`;
+        }
+    }
+
+    // Update sensor chip states
+    Object.keys(SENSOR_CONFIG).forEach(sensorType => {
+        const chip = document.getElementById(`chipExp-${sensorType}`);
+        if (chip) {
+            const hasData = !!(appState.datasets[sensorType] && appState.datasets[sensorType].success);
+            chip.disabled = !hasData;
+            chip.title = hasData
+                ? `Click to download processed ${SENSOR_CONFIG[sensorType].name} (${appState.datasets[sensorType].validDataPointsCount.toLocaleString()} pts)`
+                : 'No data loaded for this stream';
+        }
+    });
+
+    // Update relationship chip states
+    const hasSw = !!appState.datasets.smartwatch_heart_rate;
+    const hasChest = !!appState.datasets.chest_ecg_heart_rate;
+    const hasHr = hasSw || hasChest;
+    const hasVel = !!appState.datasets.vehicle_velocity;
+    const hasAcc = !!appState.datasets.vehicle_acceleration;
+    const hasGsr = !!appState.datasets.healthypi_gsr;
+
+    const relState = {
+        hr_vel: hasHr && hasVel,
+        hr_acc: hasHr && hasAcc,
+        vel_acc: hasVel && hasAcc,
+        hr_agreement: hasSw && hasChest,
+        gsr_rel: hasGsr && (hasVel || hasAcc || hasHr)
+    };
+
+    Object.entries(relState).forEach(([relKey, isAvail]) => {
+        const chip = document.getElementById(`chipExpRel-${relKey}`);
+        if (chip) {
+            chip.disabled = !isAvail;
+            chip.title = isAvail ? 'Click to export paired data CSV' : 'Requires corresponding streams to be uploaded';
+        }
+    });
+}
+
+// -------------------------------------------------------------
+// Download Utility (Blob URL)
+// -------------------------------------------------------------
+function downloadBlob(filename, textContent, mimeType = 'text/csv;charset=utf-8;') {
+    const blob = new Blob([textContent], { type: mimeType });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function escapeCsvField(val) {
+    if (val === null || val === undefined) return '';
+    const s = String(val);
+    if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+}
+
+// -------------------------------------------------------------
+// Export 1: Synchronized Multi-Stream Master CSV
+// -------------------------------------------------------------
+function exportMasterCsv() {
+    const activeEntries = Object.entries(appState.datasets).filter(([_, d]) => d && d.success && d.dataPoints);
+    if (activeEntries.length === 0) {
+        alert('No active sensor data available to export. Please load data first.');
+        return;
+    }
+
+    const epochToIso = new Map();
+    const epochToFmt = new Map();
+    const streamMaps = {
+        smartwatch_heart_rate: new Map(),
+        chest_ecg_heart_rate: new Map(),
+        vehicle_velocity: new Map(),
+        vehicle_acceleration: new Map(),
+        healthypi_gsr: new Map()
+    };
+
+    activeEntries.forEach(([sType, data]) => {
+        const map = streamMaps[sType];
+        data.dataPoints.forEach(pt => {
+            if (!map.has(pt.epochMillis)) {
+                map.set(pt.epochMillis, pt.value);
+            }
+            if (!epochToIso.has(pt.epochMillis) && pt.rawTimestamp) {
+                epochToIso.set(pt.epochMillis, pt.rawTimestamp);
+            }
+            if (!epochToFmt.has(pt.epochMillis) && pt.formattedTime) {
+                epochToFmt.set(pt.epochMillis, pt.formattedTime);
+            }
+        });
+    });
+
+    const sortedEpochs = Array.from(epochToIso.keys()).sort((a, b) => a - b);
+    if (sortedEpochs.length === 0) {
+        alert('No timestamped observations found.');
+        return;
+    }
+
+    let csv = '\uFEFFtimestamp_iso,formatted_time,epoch_millis,smartwatch_heart_rate_bpm,chest_ecg_heart_rate_bpm,vehicle_velocity_kmh,vehicle_acceleration_ms2,healthypi_gsr_detrended\r\n';
+
+    sortedEpochs.forEach(epoch => {
+        const iso = epochToIso.get(epoch) || '';
+        const fmt = epochToFmt.get(epoch) || '';
+        const sw = streamMaps.smartwatch_heart_rate.get(epoch);
+        const chest = streamMaps.chest_ecg_heart_rate.get(epoch);
+        const vel = streamMaps.vehicle_velocity.get(epoch);
+        const acc = streamMaps.vehicle_acceleration.get(epoch);
+        const gsr = streamMaps.healthypi_gsr.get(epoch);
+
+        csv += [
+            escapeCsvField(iso),
+            escapeCsvField(fmt),
+            epoch,
+            sw !== undefined ? sw.toFixed(2) : '',
+            chest !== undefined ? chest.toFixed(2) : '',
+            vel !== undefined ? vel.toFixed(2) : '',
+            acc !== undefined ? acc.toFixed(3) : '',
+            gsr !== undefined ? gsr.toFixed(2) : ''
+        ].join(',') + '\r\n';
+    });
+
+    downloadBlob('master_synced_processed_timeline.csv', csv);
+}
+
+// -------------------------------------------------------------
+// Export 2: Individual Processed Sensor CSV
+// -------------------------------------------------------------
+function exportSensorCsv(sensorType) {
+    const data = appState.datasets[sensorType];
+    if (!data || !data.success || !data.dataPoints || data.dataPoints.length === 0) {
+        alert(`No data available to export for ${SENSOR_CONFIG[sensorType]?.name || sensorType}.`);
+        return;
+    }
+
+    const cfg = SENSOR_CONFIG[sensorType] || { name: sensorType, unit: '' };
+    let csv = '\uFEFFtimestamp_iso,formatted_time,epoch_millis,value,sensor_type,sensor_name,unit\r\n';
+
+    data.dataPoints.forEach(pt => {
+        csv += [
+            escapeCsvField(pt.rawTimestamp),
+            escapeCsvField(pt.formattedTime),
+            pt.epochMillis,
+            typeof pt.value === 'number' ? pt.value.toFixed(4) : pt.value,
+            escapeCsvField(sensorType),
+            escapeCsvField(cfg.name),
+            escapeCsvField(cfg.unit)
+        ].join(',') + '\r\n';
+    });
+
+    downloadBlob(`processed_${sensorType}.csv`, csv);
+}
+
+function exportAllIndividualCsvs() {
+    const activeSensors = Object.keys(SENSOR_CONFIG).filter(t => appState.datasets[t] && appState.datasets[t].success);
+    if (activeSensors.length === 0) {
+        alert('No active sensor streams loaded.');
+        return;
+    }
+
+    activeSensors.forEach((sensorType, index) => {
+        setTimeout(() => exportSensorCsv(sensorType), index * 300);
+    });
+}
+
+// -------------------------------------------------------------
+// Export 3: Cross-Sensor Matched Pairs CSV
+// -------------------------------------------------------------
+function generateMatchedCsv(relationType) {
+    const vel = appState.datasets.vehicle_velocity;
+    const acc = appState.datasets.vehicle_acceleration;
+    const sw = appState.datasets.smartwatch_heart_rate;
+    const chest = appState.datasets.chest_ecg_heart_rate;
+    const gsr = appState.datasets.healthypi_gsr;
+
+    if (relationType === 'hr_vel') {
+        const isSw = appState.activeSubToggles.hrVel === 'sw';
+        const hr = isSw ? sw : chest;
+        const hrName = isSw ? 'Smartwatch Heart Rate' : 'Chest ECG Heart Rate';
+        if (!vel || !hr) return null;
+
+        const match = exactMatchStreams(vel, hr);
+        if (!match.sufficient) return null;
+
+        let csv = `\uFEFF# CS5013 Matched Relationship: ${hrName} vs Vehicle Velocity\r\n`;
+        csv += `# Total Synchronized Matches: ${match.count}\r\n`;
+        csv += `timestamp_iso,formatted_time,epoch_millis,vehicle_velocity_kmh,heart_rate_bpm,sensor_used\r\n`;
+        match.points.forEach(pt => {
+            csv += [
+                escapeCsvField(pt.rawX || pt.rawY),
+                escapeCsvField(pt.formattedTime),
+                pt.epochMillis,
+                pt.x.toFixed(2),
+                pt.y.toFixed(2),
+                escapeCsvField(hrName)
+            ].join(',') + '\r\n';
+        });
+        return { filename: `matched_${isSw ? 'smartwatch' : 'chest'}_hr_vs_velocity.csv`, csv };
+    }
+
+    if (relationType === 'hr_acc') {
+        const isSw = appState.activeSubToggles.hrAcc === 'sw';
+        const hr = isSw ? sw : chest;
+        const hrName = isSw ? 'Smartwatch Heart Rate' : 'Chest ECG Heart Rate';
+        if (!acc || !hr) return null;
+
+        const match = exactMatchStreams(acc, hr);
+        if (!match.sufficient) return null;
+
+        let csv = `\uFEFF# CS5013 Matched Relationship: ${hrName} vs Vehicle Acceleration\r\n`;
+        csv += `# Total Synchronized Matches: ${match.count}\r\n`;
+        csv += `timestamp_iso,formatted_time,epoch_millis,vehicle_acceleration_ms2,heart_rate_bpm,sensor_used\r\n`;
+        match.points.forEach(pt => {
+            csv += [
+                escapeCsvField(pt.rawX || pt.rawY),
+                escapeCsvField(pt.formattedTime),
+                pt.epochMillis,
+                pt.x.toFixed(3),
+                pt.y.toFixed(2),
+                escapeCsvField(hrName)
+            ].join(',') + '\r\n';
+        });
+        return { filename: `matched_${isSw ? 'smartwatch' : 'chest'}_hr_vs_acceleration.csv`, csv };
+    }
+
+    if (relationType === 'vel_acc') {
+        if (!vel || !acc) return null;
+        const match = exactMatchStreams(vel, acc);
+        if (!match.sufficient) return null;
+
+        let csv = `\uFEFF# CS5013 Matched Relationship: Vehicle Velocity vs Vehicle Acceleration\r\n`;
+        csv += `# Total Synchronized Matches: ${match.count}\r\n`;
+        csv += `timestamp_iso,formatted_time,epoch_millis,vehicle_velocity_kmh,vehicle_acceleration_ms2\r\n`;
+        match.points.forEach(pt => {
+            csv += [
+                escapeCsvField(pt.rawX || pt.rawY),
+                escapeCsvField(pt.formattedTime),
+                pt.epochMillis,
+                pt.x.toFixed(2),
+                pt.y.toFixed(3)
+            ].join(',') + '\r\n';
+        });
+        return { filename: 'matched_velocity_vs_acceleration.csv', csv };
+    }
+
+    if (relationType === 'hr_agreement') {
+        if (!sw || !chest) return null;
+        const match = exactMatchStreams(chest, sw);
+        if (!match.sufficient) return null;
+
+        let csv = `\uFEFF# CS5013 Sensor Agreement Analysis: Smartwatch HR vs Chest ECG Monitor\r\n`;
+        csv += `# Total Synchronized Seconds: ${match.count}\r\n`;
+        csv += `timestamp_iso,formatted_time,epoch_millis,chest_ecg_hr_bpm,smartwatch_hr_bpm,diff_smartwatch_minus_chest_bpm\r\n`;
+        match.points.forEach(pt => {
+            const diff = pt.y - pt.x;
+            csv += [
+                escapeCsvField(pt.rawX || pt.rawY),
+                escapeCsvField(pt.formattedTime),
+                pt.epochMillis,
+                pt.x.toFixed(2),
+                pt.y.toFixed(2),
+                diff.toFixed(2)
+            ].join(',') + '\r\n';
+        });
+        return { filename: 'matched_sensor_agreement_watch_vs_chest.csv', csv };
+    }
+
+    if (relationType === 'gsr_rel') {
+        if (!gsr) return null;
+        const targetType = appState.activeSubToggles.gsrRel;
+        const targetStream = appState.datasets[
+            targetType === 'vel' ? 'vehicle_velocity' :
+            targetType === 'acc' ? 'vehicle_acceleration' :
+            targetType === 'sw' ? 'smartwatch_heart_rate' : 'chest_ecg_heart_rate'
+        ];
+        if (!targetStream) return null;
+
+        const match = exactMatchStreams(targetStream, gsr);
+        if (!match.sufficient) return null;
+
+        const targetLabel = targetType === 'vel' ? 'velocity_kmh' :
+                            targetType === 'acc' ? 'acceleration_ms2' :
+                            targetType === 'sw' ? 'smartwatch_hr_bpm' : 'chest_ecg_hr_bpm';
+
+        let csv = `\uFEFF# CS5013 Matched Relationship: GSR vs ${targetLabel}\r\n`;
+        csv += `# Total Synchronized Matches: ${match.count}\r\n`;
+        csv += `timestamp_iso,formatted_time,epoch_millis,${targetLabel},detrended_gsr_adc\r\n`;
+        match.points.forEach(pt => {
+            csv += [
+                escapeCsvField(pt.rawX || pt.rawY),
+                escapeCsvField(pt.formattedTime),
+                pt.epochMillis,
+                pt.x.toFixed(3),
+                pt.y.toFixed(2)
+            ].join(',') + '\r\n';
+        });
+        return { filename: `matched_gsr_vs_${targetType}.csv`, csv };
+    }
+
+    return null;
+}
+
+function exportAllMatchedCsvs() {
+    const list = ['hr_vel', 'hr_acc', 'vel_acc', 'hr_agreement', 'gsr_rel'];
+    let delay = 0;
+    let foundAny = false;
+
+    list.forEach(relType => {
+        const res = generateMatchedCsv(relType);
+        if (res) {
+            foundAny = true;
+            setTimeout(() => downloadBlob(res.filename, res.csv), delay);
+            delay += 300;
+        }
+    });
+
+    if (!foundAny) {
+        alert('No cross-sensor relationships currently have sufficient matching data.');
+    }
+}
+
+// -------------------------------------------------------------
+// Export 4: Complete Processed Data Bundle (JSON)
+// -------------------------------------------------------------
+function exportJsonBundle() {
+    const bundle = {
+        project: 'CS5013 Multi-Modal Transportation Data Visualizer',
+        team: 'Team AA (Akshit Gupta CE23B054 & Ayush Shukla CE23B057)',
+        exportedAt: new Date().toISOString(),
+        summary: {
+            activeStreamCount: Object.values(appState.datasets).filter(d => d && d.success).length,
+            totalObservations: Object.values(appState.datasets).reduce((acc, d) => acc + (d ? d.validDataPointsCount || 0 : 0), 0)
+        },
+        streams: {},
+        crossSensorMatches: {}
+    };
+
+    Object.entries(appState.datasets).forEach(([sType, data]) => {
+        if (data && data.success) {
+            bundle.streams[sType] = {
+                sensorType: sType,
+                filename: data.filename,
+                unit: data.unit,
+                validDataPointsCount: data.validDataPointsCount,
+                corruptedDataPointsCount: data.corruptedDataPointsCount,
+                minValue: data.minValue,
+                maxValue: data.maxValue,
+                meanValue: data.meanValue,
+                timeSpanStartIso: data.timeSpanStartIso,
+                timeSpanEndIso: data.timeSpanEndIso,
+                dataPoints: data.dataPoints
+            };
+        }
+    });
+
+    // Add active relationship pairs
+    ['hr_vel', 'hr_acc', 'vel_acc', 'hr_agreement', 'gsr_rel'].forEach(rel => {
+        const matched = generateMatchedCsv(rel);
+        if (matched) {
+            bundle.crossSensorMatches[rel] = {
+                filename: matched.filename,
+                status: 'matched'
+            };
+        }
+    });
+
+    const jsonStr = JSON.stringify(bundle, null, 2);
+    downloadBlob('processed_transportation_data_bundle.json', jsonStr, 'application/json;charset=utf-8;');
+}
+
+// -------------------------------------------------------------
+// Export 5: Batch Download Everything
+// -------------------------------------------------------------
+function exportBatchAll() {
+    exportMasterCsv();
+    setTimeout(() => exportAllIndividualCsvs(), 400);
+    setTimeout(() => exportAllMatchedCsvs(), 1200);
+    setTimeout(() => exportJsonBundle(), 2000);
+}
+

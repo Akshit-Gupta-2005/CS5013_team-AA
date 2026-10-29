@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import edu.iitm.cs5013.export.DataExporter;
 import edu.iitm.cs5013.matcher.ExactTimestampMatcher;
 import edu.iitm.cs5013.model.MatchResult;
 import edu.iitm.cs5013.model.SensorParseResult;
@@ -19,7 +20,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * REST API handler for sensor uploads, validation, and exact timestamp matching.
+ * REST API handler for sensor uploads, validation, exact timestamp matching, and data export.
  */
 public class ApiHandler implements HttpHandler {
 
@@ -46,7 +47,6 @@ public class ApiHandler implements HttpHandler {
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-        // Add CORS headers
         exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
         exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
@@ -69,6 +69,12 @@ public class ApiHandler implements HttpHandler {
                 handleListSamples(exchange);
             } else if ("/api/oct22-data".equals(path) && "GET".equalsIgnoreCase(exchange.getRequestMethod())) {
                 handleLoadOct22Data(exchange);
+            } else if ("/api/export/oct22-master".equals(path) && "GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                handleExportOct22Master(exchange);
+            } else if ("/api/export/master".equals(path) && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                handleExportMaster(exchange);
+            } else if ("/api/export/sensor".equals(path) && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                handleExportSensor(exchange);
             } else if (path.startsWith("/api/sample-data/") && "GET".equalsIgnoreCase(exchange.getRequestMethod())) {
                 handleGetSampleData(exchange, path.substring("/api/sample-data/".length()));
             } else {
@@ -85,7 +91,7 @@ public class ApiHandler implements HttpHandler {
         JsonNode root = mapper.readTree(body);
 
         if (root == null || !root.has("sensorType") || !root.has("csvContent")) {
-            sendJson(exchange, 400, Map.of("error", "Invalid request. Must include 'sensorType' and 'csvContent'."));
+            sendJson(exchange, 400, Map.of("error", "Missing required fields: sensorType and csvContent."));
             return;
         }
 
@@ -96,10 +102,8 @@ public class ApiHandler implements HttpHandler {
         JsonNode contentNode = root.get("csvContent");
         if (contentNode.isTextual()) {
             csvContent = contentNode.asText();
-        } else if (contentNode.has("value")) {
-            csvContent = contentNode.get("value").asText();
-        } else {
-            csvContent = contentNode.asText();
+        } else if (contentNode.isBinary()) {
+            csvContent = new String(contentNode.binaryValue(), StandardCharsets.UTF_8);
         }
 
         SensorType sensorType = SensorType.fromId(sensorTypeId);
@@ -116,15 +120,15 @@ public class ApiHandler implements HttpHandler {
         String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
         JsonNode root = mapper.readTree(body);
 
-        if (!root.has("seriesX") || !root.has("seriesY")) {
-            sendJson(exchange, 400, Map.of("error", "Missing seriesX or seriesY in matching request."));
+        if (root == null || !root.has("seriesX") || !root.has("seriesY")) {
+            sendJson(exchange, 400, Map.of("error", "Missing required seriesX or seriesY objects in request body."));
             return;
         }
 
         SensorParseResult seriesX = mapper.treeToValue(root.get("seriesX"), SensorParseResult.class);
         SensorParseResult seriesY = mapper.treeToValue(root.get("seriesY"), SensorParseResult.class);
-        String labelX = root.has("seriesXLabel") ? root.get("seriesXLabel").asText() : "Series X";
-        String labelY = root.has("seriesYLabel") ? root.get("seriesYLabel").asText() : "Series Y";
+        String labelX = root.has("labelX") ? root.get("labelX").asText() : "Series X";
+        String labelY = root.has("labelY") ? root.get("labelY").asText() : "Series Y";
 
         MatchResult matchResult = ExactTimestampMatcher.match(seriesX, seriesY, labelX, labelY);
         sendJson(exchange, 200, matchResult);
@@ -138,14 +142,68 @@ public class ApiHandler implements HttpHandler {
         status.put("team", "Team AA");
         status.put("authors", List.of("Akshit Gupta (CE23B054)", "Ayush Shukla (CE23B057)"));
         status.put("runtime", System.getProperty("java.version"));
-        status.put("oct22DataAvailable", Files.exists(oct22DataDir));
+        status.put("oct22DataAvailable", Files.exists(oct22DataDir) && Files.isDirectory(oct22DataDir));
         sendJson(exchange, 200, status);
     }
 
     private void handleLoadOct22Data(HttpExchange exchange) throws IOException {
-        if (!Files.exists(oct22DataDir) || !Files.isDirectory(oct22DataDir)) {
+        Map<String, SensorParseResult> datasets = loadOct22Datasets();
+        if (datasets.isEmpty() && (!Files.exists(oct22DataDir) || !Files.isDirectory(oct22DataDir))) {
             sendJson(exchange, 404, Map.of("error", "22 Oct 2026 collected data folder not found at: " + oct22DataDir));
             return;
+        }
+
+        sendJson(exchange, 200, Map.of(
+                "success", true,
+                "datasets", datasets
+        ));
+    }
+
+    private void handleExportOct22Master(HttpExchange exchange) throws IOException {
+        Map<String, SensorParseResult> datasets = loadOct22Datasets();
+        if (datasets.isEmpty()) {
+            sendJson(exchange, 404, Map.of("error", "No 22 Oct 2026 data available to export"));
+            return;
+        }
+        String csv = DataExporter.toMasterCsv(datasets);
+        sendCsv(exchange, 200, "master_synced_22_oct_2026_dataset.csv", csv);
+    }
+
+    private void handleExportMaster(HttpExchange exchange) throws IOException {
+        String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        JsonNode root = mapper.readTree(body);
+        Map<String, SensorParseResult> datasets = new LinkedHashMap<>();
+        if (root != null && root.has("datasets")) {
+            JsonNode dsNode = root.get("datasets");
+            Iterator<Map.Entry<String, JsonNode>> fields = dsNode.fields();
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> entry = fields.next();
+                if (!entry.getValue().isNull()) {
+                    SensorParseResult res = mapper.treeToValue(entry.getValue(), SensorParseResult.class);
+                    datasets.put(entry.getKey(), res);
+                }
+            }
+        }
+        String csv = DataExporter.toMasterCsv(datasets);
+        sendCsv(exchange, 200, "master_synced_processed_dataset.csv", csv);
+    }
+
+    private void handleExportSensor(HttpExchange exchange) throws IOException {
+        String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        JsonNode root = mapper.readTree(body);
+        if (root == null) {
+            sendJson(exchange, 400, Map.of("error", "Missing request body"));
+            return;
+        }
+        SensorParseResult series = mapper.treeToValue(root, SensorParseResult.class);
+        String sensorId = series.getSensorType() != null ? series.getSensorType() : "sensor";
+        String csv = DataExporter.toSensorCsv(series);
+        sendCsv(exchange, 200, "processed_" + sensorId + ".csv", csv);
+    }
+
+    private Map<String, SensorParseResult> loadOct22Datasets() throws IOException {
+        if (!Files.exists(oct22DataDir) || !Files.isDirectory(oct22DataDir)) {
+            return Collections.emptyMap();
         }
 
         Map<String, SensorParseResult> datasets = new LinkedHashMap<>();
@@ -203,11 +261,7 @@ public class ApiHandler implements HttpHandler {
                 );
             }
         }
-
-        sendJson(exchange, 200, Map.of(
-                "success", true,
-                "datasets", datasets
-        ));
+        return datasets;
     }
 
     private void handleListSamples(HttpExchange exchange) throws IOException {
@@ -257,6 +311,18 @@ public class ApiHandler implements HttpHandler {
     private void sendJson(HttpExchange exchange, int statusCode, Object data) throws IOException {
         byte[] bytes = mapper.writeValueAsBytes(data);
         exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+        exchange.sendResponseHeaders(statusCode, bytes.length);
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(bytes);
+        }
+    }
+
+    private void sendCsv(HttpExchange exchange, int statusCode, String filename, String csvContent) throws IOException {
+        byte[] bytes = csvContent.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "text/csv; charset=UTF-8");
+        exchange.getResponseHeaders().set("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
         exchange.sendResponseHeaders(statusCode, bytes.length);
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(bytes);

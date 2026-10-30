@@ -1,12 +1,5 @@
-# CS5013: Multi-Modal Transportation Data Fusion Tool
-## Midterm Evaluation Deliverable — Sensor Stream Visualization & Exploratory Relationship Dashboard
-
-**Academic Course:** CS5013 (Software Engineering for Transportation Systems)  
-**Department:** Department of Civil Engineering, IIT Madras  
-**Team AA:** 
-- Akshit Gupta (`CE23B054`) — [GitHub](https://github.com/Akshit-Gupta-2005)
-- Ayush Shukla (`CE23B057`) — [GitHub](https://github.com/AyushShukla761)  
-**Project Stakeholder:** Dr. Karthik K. Srinivasan (Faculty, Civil Engineering, IIT Madras)
+# Multi-Modal Transportation Data Fusion & Visualization Platform
+## High-Precision Sensor Stream Visualization & Telemetry Analytics
 
 ---
 
@@ -112,7 +105,7 @@ http://localhost:8080
 2. In **Section 1**, drag or browse `sample_data/smartwatch_heart_rate.csv`.
 3. Observe **Section 2** instantly render the Smartwatch Heart Rate graph.
 4. Upload `sample_data/chest_ecg_heart_rate.csv` and observe the dual-series comparison unlock.
-5. Upload `sample_data/vehicle_velocity.csv` and `sample_data/vehicle_acceleration.csv`.
+5. Upload `sample_data/vehicle_dynamics.csv` (or raw vehicle GNSS telemetry log).
 6. Inspect the Velocity and Acceleration graphs in Section 2.
 7. Switch to **Section 3** to explore the scatter plots (HR vs Velocity, HR vs Acceleration, Velocity vs Acceleration, Sensor Agreement).
 8. Scroll to **Section 4** to view the synchronized 3-panel trip timeline.

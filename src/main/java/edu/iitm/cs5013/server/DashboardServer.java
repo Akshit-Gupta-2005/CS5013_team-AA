@@ -36,9 +36,7 @@ public class DashboardServer {
 
         server.start();
         System.out.println("==================================================================");
-        System.out.println("  CS5013: Multi-Modal Transportation Data Visualization Dashboard");
-        System.out.println("  Team AA | Akshit Gupta (CE23B054) & Ayush Shukla (CE23B057)");
-        System.out.println("==================================================================");
+        System.out.println("  Multi-Modal Transportation Data Visualization Dashboard");
         System.out.println("  Server successfully started on: http://localhost:" + port);
         System.out.println("  Press Ctrl+C to stop.");
         System.out.println("==================================================================");

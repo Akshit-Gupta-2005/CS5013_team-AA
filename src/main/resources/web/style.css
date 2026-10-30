@@ -354,6 +354,7 @@ body {
 .icon-chest { background: var(--color-chest); }
 .icon-velocity { background: var(--color-vel); }
 .icon-accel { background: var(--color-accel); }
+.icon-dynamics { background: linear-gradient(135deg, var(--color-vel) 0%, var(--color-accel) 100%); }
 
 .card-title-group {
     flex: 1;

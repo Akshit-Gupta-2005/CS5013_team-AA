@@ -95,12 +95,12 @@ async function checkBackendHealth() {
 // 2. Upload Handlers & Dropzone Logic
 // -------------------------------------------------------------
 function initUploadDropzones() {
-    const sensorTypes = Object.keys(SENSOR_CONFIG);
+    const uploadTypes = ['smartwatch_heart_rate', 'chest_ecg_heart_rate', 'vehicle_dynamics', 'healthypi_gsr'];
 
-    sensorTypes.forEach(sensorType => {
-        const dropZone = document.getElementById(`drop-${sensorType}`);
-        const fileInput = document.getElementById(`file-${sensorType}`);
-        const removeBtn = document.getElementById(`remove-${sensorType}`);
+    uploadTypes.forEach(type => {
+        const dropZone = document.getElementById(`drop-${type}`);
+        const fileInput = document.getElementById(`file-${type}`);
+        const removeBtn = document.getElementById(`remove-${type}`);
 
         if (!dropZone || !fileInput) return;
 
@@ -125,14 +125,22 @@ function initUploadDropzones() {
             e.preventDefault();
             dropZone.classList.remove('dragover');
             if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                handleFileUpload(sensorType, Array.from(e.dataTransfer.files));
+                if (type === 'vehicle_dynamics') {
+                    handleVehicleDynamicsUpload(Array.from(e.dataTransfer.files));
+                } else {
+                    handleFileUpload(type, Array.from(e.dataTransfer.files));
+                }
             }
         });
 
         // Input file change
         fileInput.addEventListener('change', (e) => {
             if (e.target.files && e.target.files.length > 0) {
-                handleFileUpload(sensorType, Array.from(e.target.files));
+                if (type === 'vehicle_dynamics') {
+                    handleVehicleDynamicsUpload(Array.from(e.target.files));
+                } else {
+                    handleFileUpload(type, Array.from(e.target.files));
+                }
             }
         });
 
@@ -140,10 +148,185 @@ function initUploadDropzones() {
         if (removeBtn) {
             removeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                removeFile(sensorType);
+                if (type === 'vehicle_dynamics') {
+                    removeVehicleDynamics();
+                } else {
+                    removeFile(type);
+                }
             });
         }
     });
+}
+
+async function handleVehicleDynamicsUpload(files) {
+    const fileList = Array.isArray(files) ? files : [files];
+    const csvFiles = fileList.filter(f => f.name.toLowerCase().endsWith('.csv'));
+    if (csvFiles.length === 0) {
+        showCardError('vehicle_dynamics', 'Invalid file type. Please upload a CSV (.csv) file.');
+        return;
+    }
+
+    const displayFilename = csvFiles[0].name;
+    setCardLoading('vehicle_dynamics', displayFilename);
+
+    try {
+        const textContent = await readFileAsText(csvFiles[0]);
+
+        // Ingest and parse velocity and acceleration simultaneously from single CSV
+        const [velRes, accRes] = await Promise.all([
+            fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sensorType: 'vehicle_velocity',
+                    filename: displayFilename,
+                    csvContent: textContent
+                })
+            }),
+            fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sensorType: 'vehicle_acceleration',
+                    filename: displayFilename,
+                    csvContent: textContent
+                })
+            })
+        ]);
+
+        const velData = await velRes.json();
+        const accData = await accRes.json();
+
+        if (velData.success || accData.success) {
+            appState.datasets.vehicle_velocity = velData.success ? velData : null;
+            appState.datasets.vehicle_acceleration = accData.success ? accData : null;
+
+            setVehicleDynamicsSuccess(displayFilename, velData, accData);
+
+            // Auto-populate Chest ECG if GNSS multi-stream contains Polar HR
+            if (textContent.includes('Polar_HR_bpm') && !appState.datasets.chest_ecg_heart_rate) {
+                try {
+                    setCardLoading('chest_ecg_heart_rate', displayFilename);
+                    const ecgRes = await fetch('/api/upload', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            sensorType: 'chest_ecg_heart_rate',
+                            filename: displayFilename,
+                            csvContent: textContent
+                        })
+                    });
+                    const ecgData = await ecgRes.json();
+                    if (ecgData.success) {
+                        appState.datasets.chest_ecg_heart_rate = ecgData;
+                        setCardSuccess('chest_ecg_heart_rate', ecgData);
+                    } else {
+                        removeFile('chest_ecg_heart_rate');
+                    }
+                } catch (ignored) {
+                    removeFile('chest_ecg_heart_rate');
+                }
+            }
+
+            updateAllVisualizations();
+        } else {
+            appState.datasets.vehicle_velocity = null;
+            appState.datasets.vehicle_acceleration = null;
+            const errs = [...(velData.errors || []), ...(accData.errors || [])];
+            showCardError('vehicle_dynamics', errs.length > 0 ? errs.join('<br>') : 'Failed to parse vehicle dynamics from CSV.');
+            updateAllVisualizations();
+        }
+    } catch (err) {
+        appState.datasets.vehicle_velocity = null;
+        appState.datasets.vehicle_acceleration = null;
+        showCardError('vehicle_dynamics', 'Upload error: ' + err.message);
+        updateAllVisualizations();
+    }
+}
+
+function setVehicleDynamicsSuccess(displayFilename, velData, accData) {
+    const card = document.getElementById('card-vehicle_dynamics');
+    const status = document.getElementById('status-vehicle_dynamics');
+    const details = document.getElementById('details-vehicle_dynamics');
+    const dropZone = document.getElementById('drop-vehicle_dynamics');
+    const errorBox = document.getElementById('error-vehicle_dynamics');
+
+    if (errorBox) {
+        errorBox.classList.add('hidden');
+        errorBox.innerHTML = '';
+    }
+    if (dropZone) dropZone.classList.add('hidden');
+    if (card) {
+        card.classList.remove('loading', 'error');
+        card.classList.add('loaded');
+    }
+    if (status) {
+        status.className = 'status-badge success';
+        status.textContent = 'Active';
+    }
+    if (details) details.classList.remove('hidden');
+
+    const fnElem = document.getElementById('filename-vehicle_dynamics');
+    if (fnElem) fnElem.textContent = displayFilename || velData?.filename || accData?.filename || 'vehicle_dynamics.csv';
+
+    const countElem = document.getElementById('count-vehicle_dynamics');
+    const totalPts = Math.max(velData?.validDataPointsCount || 0, accData?.validDataPointsCount || 0);
+    if (countElem) countElem.textContent = `${totalPts.toLocaleString()} pts`;
+
+    const spdElem = document.getElementById('range-speed-vehicle_dynamics');
+    if (spdElem) {
+        if (velData && velData.success && velData.minValue !== null) {
+            spdElem.textContent = `${velData.minValue.toFixed(1)} – ${velData.maxValue.toFixed(1)} km/h`;
+        } else {
+            spdElem.textContent = 'N/A';
+        }
+    }
+
+    const accElem = document.getElementById('range-accel-vehicle_dynamics');
+    if (accElem) {
+        if (accData && accData.success && accData.minValue !== null) {
+            accElem.textContent = `${accData.minValue.toFixed(2)} – ${accData.maxValue.toFixed(2)} m/s²`;
+        } else {
+            accElem.textContent = 'N/A';
+        }
+    }
+
+    const spanElem = document.getElementById('timespan-vehicle_dynamics');
+    if (spanElem) {
+        const minTime = formatShortTime(velData?.minFormattedTime || accData?.minFormattedTime);
+        const maxTime = formatShortTime(velData?.maxFormattedTime || accData?.maxFormattedTime);
+        spanElem.textContent = `${minTime} → ${maxTime}`;
+    }
+
+    updateUploadCountBadge();
+}
+
+function removeVehicleDynamics() {
+    appState.datasets.vehicle_velocity = null;
+    appState.datasets.vehicle_acceleration = null;
+    const fileInput = document.getElementById('file-vehicle_dynamics');
+    if (fileInput) fileInput.value = '';
+
+    const card = document.getElementById('card-vehicle_dynamics');
+    const status = document.getElementById('status-vehicle_dynamics');
+    const details = document.getElementById('details-vehicle_dynamics');
+    const dropZone = document.getElementById('drop-vehicle_dynamics');
+    const errorBox = document.getElementById('error-vehicle_dynamics');
+
+    if (card) card.classList.remove('loaded', 'loading', 'error');
+    if (status) {
+        status.className = 'status-badge empty';
+        status.textContent = 'No File';
+    }
+    if (details) details.classList.add('hidden');
+    if (dropZone) dropZone.classList.remove('hidden');
+    if (errorBox) {
+        errorBox.classList.add('hidden');
+        errorBox.innerHTML = '';
+    }
+
+    updateUploadCountBadge();
+    updateAllVisualizations();
 }
 
 async function handleFileUpload(sensorType, files) {
@@ -179,36 +362,35 @@ async function handleFileUpload(sensorType, files) {
             appState.datasets[sensorType] = data;
             setCardSuccess(sensorType, data);
 
-            // If a multi-stream GNSS+Polar log was uploaded, automatically populate counterpart motion/ECG cards
+            // If a multi-stream GNSS+Polar log was uploaded, automatically populate vehicle dynamics and counterpart ECG
             const isGnssMultiStream = displayFilename.toLowerCase().includes('gnss') || textContent.includes('Speed_kph');
             if (isGnssMultiStream) {
-                const candidateTypes = ['vehicle_velocity', 'vehicle_acceleration'];
-                if (textContent.includes('Polar_HR_bpm')) {
-                    candidateTypes.push('chest_ecg_heart_rate');
-                }
-                for (const otherType of candidateTypes) {
-                    if (otherType !== sensorType && !appState.datasets[otherType]) {
-                        try {
-                            setCardLoading(otherType, displayFilename);
-                            const otherRes = await fetch('/api/upload', {
+                if (!appState.datasets.vehicle_velocity || !appState.datasets.vehicle_acceleration) {
+                    try {
+                        setCardLoading('vehicle_dynamics', displayFilename);
+                        const [vRes, aRes] = await Promise.all([
+                            fetch('/api/upload', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    sensorType: otherType,
-                                    filename: displayFilename,
-                                    csvContent: textContent
-                                })
-                            });
-                            const otherData = await otherRes.json();
-                            if (otherData.success) {
-                                appState.datasets[otherType] = otherData;
-                                setCardSuccess(otherType, otherData);
-                            } else {
-                                removeFile(otherType);
-                            }
-                        } catch (ignored) {
-                            removeFile(otherType);
+                                body: JSON.stringify({ sensorType: 'vehicle_velocity', filename: displayFilename, csvContent: textContent })
+                            }),
+                            fetch('/api/upload', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ sensorType: 'vehicle_acceleration', filename: displayFilename, csvContent: textContent })
+                            })
+                        ]);
+                        const vData = await vRes.json();
+                        const aData = await aRes.json();
+                        if (vData.success) appState.datasets.vehicle_velocity = vData;
+                        if (aData.success) appState.datasets.vehicle_acceleration = aData;
+                        if (vData.success || aData.success) {
+                            setVehicleDynamicsSuccess(displayFilename, vData, aData);
+                        } else {
+                            removeVehicleDynamics();
                         }
+                    } catch (ignored) {
+                        removeVehicleDynamics();
                     }
                 }
             }
@@ -239,6 +421,11 @@ function readFileAsText(file) {
 }
 
 function removeFile(sensorType) {
+    if (sensorType === 'vehicle_velocity' || sensorType === 'vehicle_acceleration' || sensorType === 'vehicle_dynamics') {
+        removeVehicleDynamics();
+        return;
+    }
+
     appState.datasets[sensorType] = null;
     const fileInput = document.getElementById(`file-${sensorType}`);
     if (fileInput) fileInput.value = '';
@@ -274,6 +461,13 @@ function setCardLoading(sensorType, filename) {
 }
 
 function setCardSuccess(sensorType, data) {
+    if (sensorType === 'vehicle_velocity' || sensorType === 'vehicle_acceleration') {
+        const vel = appState.datasets.vehicle_velocity;
+        const acc = appState.datasets.vehicle_acceleration;
+        const fn = vel?.filename || acc?.filename || data.filename;
+        setVehicleDynamicsSuccess(fn, vel, acc);
+        return;
+    }
     const card = document.getElementById(`card-${sensorType}`);
     const status = document.getElementById(`status-${sensorType}`);
     const details = document.getElementById(`details-${sensorType}`);
@@ -323,7 +517,11 @@ function showCardError(sensorType, msg) {
 }
 
 function updateUploadCountBadge() {
-    const count = Object.values(appState.datasets).filter(d => d !== null).length;
+    let count = 0;
+    if (appState.datasets.smartwatch_heart_rate) count++;
+    if (appState.datasets.chest_ecg_heart_rate) count++;
+    if (appState.datasets.vehicle_velocity || appState.datasets.vehicle_acceleration) count++;
+    if (appState.datasets.healthypi_gsr) count++;
     const badge = document.getElementById('uploadedFileCount');
     if (badge) badge.textContent = count;
 }
@@ -420,30 +618,58 @@ function initGlobalButtons() {
     if (btnLoadOct22) {
         btnLoadOct22.addEventListener('click', async () => {
             btnLoadOct22.disabled = true;
-            btnLoadOct22.textContent = 'Loading 22 Oct Data...';
+            btnLoadOct22.textContent = 'Loading Field Data...';
             try {
-                Object.keys(SENSOR_CONFIG).forEach(t => setCardLoading(t, '22 Oct 2026'));
+                setCardLoading('smartwatch_heart_rate', '22 Oct Field Data');
+                setCardLoading('chest_ecg_heart_rate', '22 Oct Field Data');
+                setCardLoading('vehicle_dynamics', '22 Oct Field Data');
+                setCardLoading('healthypi_gsr', '22 Oct Field Data');
+
                 const res = await fetch('/api/oct22-data');
                 const payload = await res.json();
                 if (res.ok && payload.success && payload.datasets) {
                     Object.entries(payload.datasets).forEach(([sensorType, data]) => {
                         if (data && data.success) {
                             appState.datasets[sensorType] = data;
-                            setCardSuccess(sensorType, data);
                         } else {
-                            removeFile(sensorType);
+                            if (sensorType !== 'vehicle_velocity' && sensorType !== 'vehicle_acceleration') {
+                                removeFile(sensorType);
+                            }
                         }
                     });
+
+                    if (appState.datasets.smartwatch_heart_rate) {
+                        setCardSuccess('smartwatch_heart_rate', appState.datasets.smartwatch_heart_rate);
+                    }
+                    if (appState.datasets.chest_ecg_heart_rate) {
+                        setCardSuccess('chest_ecg_heart_rate', appState.datasets.chest_ecg_heart_rate);
+                    }
+                    if (appState.datasets.healthypi_gsr) {
+                        setCardSuccess('healthypi_gsr', appState.datasets.healthypi_gsr);
+                    }
+                    if (appState.datasets.vehicle_velocity || appState.datasets.vehicle_acceleration) {
+                        setVehicleDynamicsSuccess(
+                            'gnss_log_2026_10_22_16_41_32.csv',
+                            appState.datasets.vehicle_velocity,
+                            appState.datasets.vehicle_acceleration
+                        );
+                    } else {
+                        removeVehicleDynamics();
+                    }
+
                     updateAllVisualizations();
                 } else {
-                    throw new Error(payload.error || 'Could not load 22 Oct 2026 data');
+                    throw new Error(payload.error || 'Could not load field data');
                 }
             } catch (e) {
-                alert('Failed to load 22 Oct 2026 dataset: ' + e.message);
-                Object.keys(SENSOR_CONFIG).forEach(removeFile);
+                alert('Failed to load field study dataset: ' + e.message);
+                removeFile('smartwatch_heart_rate');
+                removeFile('chest_ecg_heart_rate');
+                removeVehicleDynamics();
+                removeFile('healthypi_gsr');
             } finally {
                 btnLoadOct22.disabled = false;
-                btnLoadOct22.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Load 22 Oct 2026 Field Data`;
+                btnLoadOct22.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Load Field Data`;
             }
         });
     }
@@ -454,39 +680,73 @@ function initGlobalButtons() {
             btnLoad.textContent = 'Loading Samples...';
             try {
                 removeFile('healthypi_gsr');
-                const sampleFiles = [
-                    { type: 'smartwatch_heart_rate', file: 'smartwatch_heart_rate.csv' },
-                    { type: 'chest_ecg_heart_rate', file: 'chest_ecg_heart_rate.csv' },
-                    { type: 'vehicle_velocity', file: 'vehicle_velocity.csv' },
-                    { type: 'vehicle_acceleration', file: 'vehicle_acceleration.csv' }
-                ];
+                removeVehicleDynamics();
+                removeFile('smartwatch_heart_rate');
+                removeFile('chest_ecg_heart_rate');
 
-                for (const item of sampleFiles) {
-                    const res = await fetch(`/api/sample-data/${item.file}`);
-                    if (res.ok) {
-                        const payload = await res.json();
-                        const upRes = await fetch('/api/upload', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                sensorType: item.type,
-                                filename: payload.filename,
-                                csvContent: payload.content
-                            })
-                        });
-                        const data = await upRes.json();
-                        if (data.success) {
-                            appState.datasets[item.type] = data;
-                            setCardSuccess(item.type, data);
-                        }
+                // Load Smartwatch HR
+                const swRes = await fetch('/api/sample-data/smartwatch_heart_rate.csv');
+                if (swRes.ok) {
+                    const sw = await swRes.json();
+                    const upSw = await fetch('/api/upload', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sensorType: 'smartwatch_heart_rate', filename: sw.filename, csvContent: sw.content })
+                    });
+                    const dSw = await upSw.json();
+                    if (dSw.success) {
+                        appState.datasets.smartwatch_heart_rate = dSw;
+                        setCardSuccess('smartwatch_heart_rate', dSw);
                     }
                 }
+
+                // Load Chest ECG
+                const ecgRes = await fetch('/api/sample-data/chest_ecg_heart_rate.csv');
+                if (ecgRes.ok) {
+                    const ecg = await ecgRes.json();
+                    const upEcg = await fetch('/api/upload', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sensorType: 'chest_ecg_heart_rate', filename: ecg.filename, csvContent: ecg.content })
+                    });
+                    const dEcg = await upEcg.json();
+                    if (dEcg.success) {
+                        appState.datasets.chest_ecg_heart_rate = dEcg;
+                        setCardSuccess('chest_ecg_heart_rate', dEcg);
+                    }
+                }
+
+                // Load Vehicle Dynamics from vehicle_dynamics.csv
+                const dynRes = await fetch('/api/sample-data/vehicle_dynamics.csv');
+                if (dynRes.ok) {
+                    const dyn = await dynRes.json();
+                    const [vUp, aUp] = await Promise.all([
+                        fetch('/api/upload', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ sensorType: 'vehicle_velocity', filename: dyn.filename, csvContent: dyn.content })
+                        }),
+                        fetch('/api/upload', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ sensorType: 'vehicle_acceleration', filename: dyn.filename, csvContent: dyn.content })
+                        })
+                    ]);
+                    const vData = await vUp.json();
+                    const aData = await aUp.json();
+                    if (vData.success) appState.datasets.vehicle_velocity = vData;
+                    if (aData.success) appState.datasets.vehicle_acceleration = aData;
+                    if (vData.success || aData.success) {
+                        setVehicleDynamicsSuccess(dyn.filename, vData, aData);
+                    }
+                }
+
                 updateAllVisualizations();
             } catch (e) {
                 alert('Failed to load sample dataset: ' + e.message);
             } finally {
                 btnLoad.disabled = false;
-                btnLoad.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Load Sample Trip CSVs`;
+                btnLoad.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Load Sample Data`;
             }
         });
     }
@@ -494,7 +754,10 @@ function initGlobalButtons() {
     if (btnReset) {
         btnReset.addEventListener('click', () => {
             if (confirm('Clear all uploaded streams and reset dashboard?')) {
-                Object.keys(SENSOR_CONFIG).forEach(removeFile);
+                removeFile('smartwatch_heart_rate');
+                removeFile('chest_ecg_heart_rate');
+                removeVehicleDynamics();
+                removeFile('healthypi_gsr');
             }
         });
     }
@@ -945,7 +1208,7 @@ function updateChartHrVsVel() {
 
     if (!match.sufficient) {
         toggleEmptyState('chartHrVsVel', true, 'Insufficient exact timestamp matches to plot this relationship.',
-            '0 exact timestamp matches found between recorded timestamps. As per midterm rules, no clock offsets, nearest-neighbor matching, or interpolation are applied.');
+            '0 exact timestamp matches found between recorded timestamps. Exact timestamp equality is required; no clock offsets or interpolation are applied.');
         if (badgeEl) {
             badgeEl.className = 'match-badge unmatched';
             badgeEl.textContent = '0 exact matches';
@@ -1041,7 +1304,7 @@ function updateChartHrVsAcc() {
 
     if (!match.sufficient) {
         toggleEmptyState('chartHrVsAcc', true, 'Insufficient exact timestamp matches to plot this relationship.',
-            '0 exact timestamp matches found between recorded timestamps. As per midterm rules, no clock offsets, nearest-neighbor matching, or interpolation are applied.');
+            '0 exact timestamp matches found between recorded timestamps. Exact timestamp equality is required; no clock offsets or interpolation are applied.');
         if (badgeEl) {
             badgeEl.className = 'match-badge unmatched';
             badgeEl.textContent = '0 exact matches';
@@ -2210,8 +2473,8 @@ function exportAllMatchedCsvs() {
 // -------------------------------------------------------------
 function exportJsonBundle() {
     const bundle = {
-        project: 'CS5013 Multi-Modal Transportation Data Visualizer',
-        team: 'Team AA (Akshit Gupta CE23B054 & Ayush Shukla CE23B057)',
+        application: 'Multi-Modal Transportation Data Fusion Platform',
+        version: '1.0.0',
         exportedAt: new Date().toISOString(),
         summary: {
             activeStreamCount: Object.values(appState.datasets).filter(d => d && d.success).length,

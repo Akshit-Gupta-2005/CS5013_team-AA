@@ -108,6 +108,16 @@ public class ApiHandler implements HttpHandler {
 
         SensorType sensorType = SensorType.fromId(sensorTypeId);
         if (sensorType == null) {
+            if ("vehicle_dynamics".equalsIgnoreCase(sensorTypeId) || "vehicle_motion".equalsIgnoreCase(sensorTypeId)) {
+                SensorParseResult vel = CsvSensorParser.parse(csvContent, SensorType.VEHICLE_VELOCITY, filename);
+                SensorParseResult acc = CsvSensorParser.parse(csvContent, SensorType.VEHICLE_ACCELERATION, filename);
+                Map<String, Object> combo = new LinkedHashMap<>();
+                combo.put("success", vel.isSuccess() || acc.isSuccess());
+                combo.put("velocity", vel);
+                combo.put("acceleration", acc);
+                sendJson(exchange, 200, combo);
+                return;
+            }
             sendJson(exchange, 400, Map.of("error", "Unknown sensor type: " + sensorTypeId));
             return;
         }
@@ -138,9 +148,6 @@ public class ApiHandler implements HttpHandler {
         Map<String, Object> status = new LinkedHashMap<>();
         status.put("status", "UP");
         status.put("application", "Multi-Modal Transportation Data Visualization");
-        status.put("course", "CS5013");
-        status.put("team", "Team AA");
-        status.put("authors", List.of("Akshit Gupta (CE23B054)", "Ayush Shukla (CE23B057)"));
         status.put("runtime", System.getProperty("java.version"));
         status.put("oct22DataAvailable", Files.exists(oct22DataDir) && Files.isDirectory(oct22DataDir));
         sendJson(exchange, 200, status);
@@ -302,6 +309,7 @@ public class ApiHandler implements HttpHandler {
         String lower = filename.toLowerCase();
         if (lower.contains("smartwatch") || lower.contains("samsung")) return SensorType.SMARTWATCH_HEART_RATE.getId();
         if (lower.contains("chest") || lower.contains("ecg") || lower.contains("polar")) return SensorType.CHEST_ECG_HEART_RATE.getId();
+        if (lower.contains("dynamics") || lower.contains("motion")) return "vehicle_dynamics";
         if (lower.contains("velocity") || lower.contains("speed")) return SensorType.VEHICLE_VELOCITY.getId();
         if (lower.contains("accel")) return SensorType.VEHICLE_ACCELERATION.getId();
         if (lower.contains("gsr") || lower.contains("healthypi") || lower.contains("hs_record")) return SensorType.HEALTHYPI_GSR.getId();

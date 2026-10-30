@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-Modal Transportation Data Visualization | CS5013</title>
+    <title>Multi-Modal Transportation Data Fusion & Visualization</title>
     <link rel="stylesheet" href="style.css">
     <!-- Local offline Chart.js bundle -->
     <script src="chart.umd.min.js"></script>
@@ -13,21 +13,13 @@
     <header class="app-header">
         <div class="header-inner container">
             <div class="header-brand">
-                <div class="brand-badge">CS5013 Project</div>
+                <div class="brand-badge">Transportation Analytics</div>
                 <div class="brand-titles">
-                    <h1>Multi-Modal Transportation Data Fusion Tool</h1>
-                    <p class="subtitle">Midterm Evaluation — Sensor Stream Visualization & Exploratory Relationship Dashboard</p>
+                    <h1>Multi-Modal Transportation Data Fusion</h1>
+                    <p class="subtitle">High-Precision Telemetry Synchronization &amp; Physiological Sensing Dashboard</p>
                 </div>
             </div>
             <div class="header-meta">
-                <div class="meta-item">
-                    <span class="meta-label">Team AA</span>
-                    <span class="meta-value">Akshit Gupta (CE23B054) &bull; Ayush Shukla (CE23B057)</span>
-                </div>
-                <div class="meta-item">
-                    <span class="meta-label">Stakeholder</span>
-                    <span class="meta-value">Dr. Karthik K. Srinivasan (Civil Engg, IIT Madras)</span>
-                </div>
                 <div class="system-status-pill" id="backendStatusPill">
                     <span class="status-dot online"></span>
                     <span class="status-text" id="backendStatusText">Backend Online (Java 26)</span>
@@ -44,21 +36,21 @@
                 <li><a href="#timeline-section">4. Combined Motion Timeline</a></li>
             </ul>
             <div class="quick-actions">
-                <button type="button" class="btn btn-primary-oct22 btn-sm" id="btnLoadOct22" title="Load 22 Oct 2026 collected field study data (Samsung Watch, Polar ECG, GNSS, HealthyPi GSR)">
+                <button type="button" class="btn btn-primary-oct22 btn-sm" id="btnLoadOct22" title="Load multi-sensor field study data (Samsung Watch, Polar ECG, GNSS, HealthyPi GSR)">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Load 22 Oct 2026 Field Data
+                    Load Field Data
                 </button>
-                <button type="button" class="btn btn-secondary btn-sm" id="btnLoadSamples" title="Load sample trip data for demonstration">
+                <button type="button" class="btn btn-secondary btn-sm" id="btnLoadSamples" title="Load sample dataset for demonstration">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Load Sample Trip CSVs
+                    Load Sample Data
                 </button>
                 <button type="button" class="btn btn-outline btn-sm" id="btnResetAll" title="Clear all uploaded data">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
                     Reset All
                 </button>
-                <button type="button" class="btn btn-export btn-sm" id="btnOpenExportModal" title="Export all processed data (CSV / JSON)">
+                <button type="button" class="btn btn-export btn-sm" id="btnOpenExportModal" title="Export processed data (CSV / JSON)">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-                    Export Processed Data
+                    Export Data
                 </button>
             </div>
         </nav>
@@ -66,26 +58,15 @@
 
     <main class="main-content container">
 
-        <!-- Banner: Scope Specification Notice -->
-        <aside class="notice-banner info-banner" aria-label="Midterm Scope Boundary Notice">
-            <div class="banner-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-            </div>
-            <div class="banner-body">
-                <strong>Midterm Architecture &amp; Field Study Compatibility:</strong>
-                Supports standalone series plotting and strict exact-timestamp comparisons across both synthetic benchmark CSVs and real-world <strong>22 Oct 2026 Multi-Sensor Field Data</strong> (Samsung Watch PPG, Polar H10 Chest ECG, GNSS Velocity/Acceleration, and HealthyPi 32-Hz Electrodermal GSR).
-            </div>
-        </aside>
-
         <!-- SECTION 1: UPLOAD DATA -->
         <section id="upload-section" class="dashboard-section">
             <div class="section-header">
                 <div>
                     <h2>1. Sensor Data Ingestion</h2>
-                    <p class="section-desc">Upload sensor CSV streams independently in any order, or click "Load 22 Oct 2026 Field Data" above. Dropping a multi-stream GNSS log automatically populates Velocity, Acceleration, and Polar Chest ECG.</p>
+                    <p class="section-desc">Upload sensor streams below or use quick actions above to load pre-configured datasets.</p>
                 </div>
                 <div class="upload-summary-pill" id="uploadCountBadge">
-                    <span id="uploadedFileCount">0</span> of 5 Streams Active
+                    <span id="uploadedFileCount">0</span> of 4 Sources Active
                 </div>
             </div>
 
@@ -172,86 +153,46 @@
                     <div class="error-msg hidden" id="error-chest_ecg_heart_rate"></div>
                 </div>
 
-                <!-- Card 3: Vehicle Velocity -->
-                <div class="upload-card" id="card-vehicle_velocity" data-sensor="vehicle_velocity">
+                <!-- Card 3: Vehicle Dynamics (Velocity & Acceleration) -->
+                <div class="upload-card" id="card-vehicle_dynamics" data-sensor="vehicle_dynamics">
                     <div class="card-header">
-                        <div class="sensor-icon icon-velocity">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m16 8-4.5 4.5"/><path d="M8 12a4 4 0 0 1 8 0"/></svg>
+                        <div class="sensor-icon icon-dynamics">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m16 8-4.5 4.5"/><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                         </div>
                         <div class="card-title-group">
-                            <h3>Vehicle Velocity</h3>
-                            <span class="unit-badge">km/h</span>
+                            <h3>Vehicle Dynamics</h3>
+                            <span class="unit-badge">km/h &bull; m/s²</span>
                         </div>
-                        <span class="status-badge empty" id="status-vehicle_velocity">No File</span>
+                        <span class="status-badge empty" id="status-vehicle_dynamics">No File</span>
                     </div>
                     
-                    <p class="card-description">Instantaneous vehicle speed from CAN-bus / GNSS telemetry.</p>
+                    <p class="card-description">Instantaneous speed and longitudinal acceleration from GNSS / CAN-bus telemetry.</p>
                     <div class="schema-hint">
-                        <strong>Supported formats:</strong> <code>timestamp, velocity</code> or GNSS Logger (<code>Date, Time_IST, Speed_kph</code>)
+                        <strong>Supported formats:</strong> GNSS Logger (<code>Speed_kph, Acceleration_mps2</code>) or CSV (<code>velocity, acceleration</code>)
                     </div>
 
-                    <div class="drop-zone" id="drop-vehicle_velocity">
-                        <input type="file" id="file-vehicle_velocity" accept=".csv" class="file-input">
+                    <div class="drop-zone" id="drop-vehicle_dynamics">
+                        <input type="file" id="file-vehicle_dynamics" accept=".csv" class="file-input">
                         <div class="drop-content">
                             <svg class="upload-cloud" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                            <span class="drop-text">Drag &amp; drop CSV or <span class="browse-link">browse</span></span>
+                            <span class="drop-text">Drag &amp; drop telemetry CSV or <span class="browse-link">browse</span></span>
                         </div>
                     </div>
 
-                    <div class="file-details hidden" id="details-vehicle_velocity">
+                    <div class="file-details hidden" id="details-vehicle_dynamics">
                         <div class="file-info-row">
-                            <span class="file-name" id="filename-vehicle_velocity">-</span>
-                            <button type="button" class="btn-remove" id="remove-vehicle_velocity" title="Remove file">&times;</button>
+                            <span class="file-name" id="filename-vehicle_dynamics">-</span>
+                            <button type="button" class="btn-remove" id="remove-vehicle_dynamics" title="Remove file">&times;</button>
                         </div>
                         <div class="file-stats-grid">
-                            <div class="stat-item"><span class="stat-label">Records</span><span class="stat-val" id="count-vehicle_velocity">0</span></div>
-                            <div class="stat-item"><span class="stat-label">Min &bull; Max</span><span class="stat-val" id="range-vehicle_velocity">-</span></div>
-                            <div class="stat-item span-2"><span class="stat-label">Time Span (UTC)</span><span class="stat-val text-xs" id="timespan-vehicle_velocity">-</span></div>
+                            <div class="stat-item"><span class="stat-label">Records</span><span class="stat-val" id="count-vehicle_dynamics">0</span></div>
+                            <div class="stat-item"><span class="stat-label">Speed Range</span><span class="stat-val" id="range-speed-vehicle_dynamics">-</span></div>
+                            <div class="stat-item"><span class="stat-label">Accel Range</span><span class="stat-val" id="range-accel-vehicle_dynamics">-</span></div>
+                            <div class="stat-item span-2"><span class="stat-label">Time Span (UTC)</span><span class="stat-val text-xs" id="timespan-vehicle_dynamics">-</span></div>
                         </div>
                     </div>
 
-                    <div class="error-msg hidden" id="error-vehicle_velocity"></div>
-                </div>
-
-                <!-- Card 4: Vehicle Acceleration -->
-                <div class="upload-card" id="card-vehicle_acceleration" data-sensor="vehicle_acceleration">
-                    <div class="card-header">
-                        <div class="sensor-icon icon-accel">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                        </div>
-                        <div class="card-title-group">
-                            <h3>Vehicle Acceleration</h3>
-                            <span class="unit-badge">m/s²</span>
-                        </div>
-                        <span class="status-badge empty" id="status-vehicle_acceleration">No File</span>
-                    </div>
-                    
-                    <p class="card-description">Longitudinal IMU acceleration (+) and braking (-).</p>
-                    <div class="schema-hint">
-                        <strong>Supported formats:</strong> <code>timestamp, acceleration</code> or GNSS Logger (<code>Date, Time_IST, Acceleration_mps2</code>)
-                    </div>
-
-                    <div class="drop-zone" id="drop-vehicle_acceleration">
-                        <input type="file" id="file-vehicle_acceleration" accept=".csv" class="file-input">
-                        <div class="drop-content">
-                            <svg class="upload-cloud" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                            <span class="drop-text">Drag &amp; drop CSV or <span class="browse-link">browse</span></span>
-                        </div>
-                    </div>
-
-                    <div class="file-details hidden" id="details-vehicle_acceleration">
-                        <div class="file-info-row">
-                            <span class="file-name" id="filename-vehicle_acceleration">-</span>
-                            <button type="button" class="btn-remove" id="remove-vehicle_acceleration" title="Remove file">&times;</button>
-                        </div>
-                        <div class="file-stats-grid">
-                            <div class="stat-item"><span class="stat-label">Records</span><span class="stat-val" id="count-vehicle_acceleration">0</span></div>
-                            <div class="stat-item"><span class="stat-label">Min &bull; Max</span><span class="stat-val" id="range-vehicle_acceleration">-</span></div>
-                            <div class="stat-item span-2"><span class="stat-label">Time Span (UTC)</span><span class="stat-val text-xs" id="timespan-vehicle_acceleration">-</span></div>
-                        </div>
-                    </div>
-
-                    <div class="error-msg hidden" id="error-vehicle_acceleration"></div>
+                    <div class="error-msg hidden" id="error-vehicle_dynamics"></div>
                 </div>
 
                 <!-- Card 5: HealthyPi Watch GSR -->
@@ -302,7 +243,7 @@
             <div class="section-header">
                 <div>
                     <h2>2. Individual Sensor Visualizations</h2>
-                    <p class="section-desc">Interactive time-series charts plotted directly from uploaded data points. Hover over points to inspect precise timestamps and numerical measurements.</p>
+                    <p class="section-desc">Interactive time-series charts plotted directly from calibrated sensor streams.</p>
                 </div>
             </div>
 
@@ -320,11 +261,6 @@
                         <span class="legend-chip chip-sw hidden" id="chipSw"><span class="chip-color color-sw"></span> Smartwatch HR</span>
                         <span class="legend-chip chip-chest hidden" id="chipChest"><span class="chip-color color-chest"></span> Chest ECG HR</span>
                     </div>
-                </div>
-
-                <div class="stream-note-banner">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                    <span><strong>Multi-Device Clock Alignment:</strong> Timestamps from IST/UTC logs are normalized to UTC epoch seconds while preserving original device clock characteristics.</span>
                 </div>
 
                 <div class="chart-wrapper">
@@ -358,7 +294,7 @@
                         <div class="empty-state" id="empty-chartVelocity">
                             <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="m16 8-4.5 4.5"/></svg>
                             <p class="empty-title">No Velocity Data</p>
-                            <p class="empty-desc">Upload Vehicle Velocity CSV to display the speed curve.</p>
+                            <p class="empty-desc">Upload Vehicle Dynamics CSV or load field data to display the speed curve.</p>
                         </div>
                     </div>
                 </div>
@@ -382,7 +318,7 @@
                         <div class="empty-state" id="empty-chartAcceleration">
                             <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                             <p class="empty-title">No Acceleration Data</p>
-                            <p class="empty-desc">Upload Vehicle Acceleration CSV to display IMU longitudinal forces.</p>
+                            <p class="empty-desc">Upload Vehicle Dynamics CSV or load field data to display longitudinal forces.</p>
                         </div>
                     </div>
                 </div>
@@ -407,7 +343,7 @@
                     <div class="empty-state" id="empty-chartGsr">
                         <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12h4l3-9 4 18 3-9h6"/></svg>
                         <p class="empty-title">No HealthyPi GSR Stream Uploaded</p>
-                        <p class="empty-desc">Upload one or more <code>hs_record_*_gsr.csv</code> files or click "Load 22 Oct 2026 Field Data" to inspect electrodermal activity.</p>
+                        <p class="empty-desc">Upload HealthyPi GSR CSV or load field data to inspect electrodermal activity.</p>
                     </div>
                 </div>
             </div>
@@ -417,17 +353,8 @@
         <section id="relationships-section" class="dashboard-section">
             <div class="section-header">
                 <div>
-                    <h2>3. Cross-Sensor Relationships (Exploratory Views)</h2>
-                    <p class="section-desc">Scatter and paired plots exploring physiological response (Heart Rate &amp; GSR) alongside vehicle dynamics. Strict exact-timestamp pairing applied.</p>
-                </div>
-            </div>
-
-            <!-- Strict Rule Compliance Banner -->
-            <div class="rule-banner">
-                <div class="rule-badge">Rule Specification</div>
-                <div class="rule-text">
-                    Observations are paired <strong>strictly on exact timestamp equality</strong> (identical recorded epoch second). 
-                    No synthetic data generation, nearest-neighbor interpolation, or resampling are applied.
+                    <h2>3. Cross-Sensor Relationships</h2>
+                    <p class="section-desc">Scatter and paired plots exploring physiological response alongside vehicle dynamics with exact timestamp pairing.</p>
                 </div>
             </div>
 
@@ -464,7 +391,7 @@
                             <div class="empty-state" id="empty-chartHrVsVel">
                                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M16 8l-8 8"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/></svg>
                                 <p class="empty-title" id="emptyTitleHrVel">Upload Required Files</p>
-                                <p class="empty-desc" id="emptyDescHrVel">Requires both Vehicle Velocity CSV and a Heart Rate CSV.</p>
+                                <p class="empty-desc" id="emptyDescHrVel">Requires Vehicle Dynamics (speed) and a Heart Rate stream.</p>
                             </div>
                         </div>
                     </div>
@@ -493,7 +420,7 @@
                             <div class="empty-state" id="empty-chartHrVsAcc">
                                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                                 <p class="empty-title" id="emptyTitleHrAcc">Upload Required Files</p>
-                                <p class="empty-desc" id="emptyDescHrAcc">Requires both Vehicle Acceleration CSV and a Heart Rate CSV.</p>
+                                <p class="empty-desc" id="emptyDescHrAcc">Requires Vehicle Dynamics (acceleration) and a Heart Rate stream.</p>
                             </div>
                         </div>
                     </div>
@@ -517,7 +444,7 @@
                             <div class="empty-state" id="empty-chartVelVsAcc">
                                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20"/></svg>
                                 <p class="empty-title">Upload Motion Streams</p>
-                                <p class="empty-desc">Requires both Vehicle Velocity CSV and Vehicle Acceleration CSV.</p>
+                                <p class="empty-desc">Requires Vehicle Dynamics CSV (speed &amp; acceleration).</p>
                             </div>
                         </div>
                     </div>
@@ -602,8 +529,8 @@
         <section id="timeline-section" class="dashboard-section">
             <div class="section-header">
                 <div>
-                    <h2>4. Combined Motion, Heart Rate &amp; GSR Timeline</h2>
-                    <p class="section-desc">Vertically stacked multi-modal comparison plots showing physiological (HR &amp; GSR) and vehicle dynamics streams across trip duration.</p>
+                    <h2>4. Synchronized Multi-Modal Timeline</h2>
+                    <p class="section-desc">Temporal alignment of physiological signals and vehicle dynamics across trip duration.</p>
                 </div>
             </div>
 
@@ -660,7 +587,7 @@
                     <div class="timeline-chart-wrapper">
                         <canvas id="timelineChartVel"></canvas>
                         <div class="empty-state mini-empty" id="empty-timelineChartVel">
-                            <p>Upload Vehicle Velocity CSV to populate the velocity timeline.</p>
+                            <p>Upload Vehicle Dynamics CSV to populate the velocity timeline.</p>
                         </div>
                     </div>
                 </div>
@@ -679,7 +606,7 @@
                     <div class="timeline-chart-wrapper">
                         <canvas id="timelineChartAcc"></canvas>
                         <div class="empty-state mini-empty" id="empty-timelineChartAcc">
-                            <p>Upload Vehicle Acceleration CSV to populate the acceleration timeline.</p>
+                            <p>Upload Vehicle Dynamics CSV to populate the acceleration timeline.</p>
                         </div>
                     </div>
                 </div>
@@ -692,14 +619,11 @@
     <footer class="app-footer">
         <div class="footer-inner container">
             <div class="footer-col">
-                <strong>CS5013: Software Engineering for Transportation Systems</strong>
-                <p>Course Project: Multi-Modal Transportation Data Fusion Tool</p>
-                <p>Department of Civil Engineering &bull; IIT Madras</p>
+                <strong>Multi-Modal Transportation Data Fusion Platform</strong>
+                <p>High-Precision Multi-Sensor Time Synchronization &amp; Analytics</p>
             </div>
             <div class="footer-col text-right">
-                <p><strong>Team AA:</strong> Akshit Gupta (CE23B054) &bull; Ayush Shukla (CE23B057)</p>
-                <p>Faculty Stakeholder: <strong>Dr. Karthik K. Srinivasan</strong></p>
-                <p class="text-muted">Built with Java 26, Maven &amp; Chart.js &bull; Running on localhost</p>
+                <p class="text-muted">Built with Java 26, Maven &amp; Chart.js</p>
             </div>
         </div>
     </footer>

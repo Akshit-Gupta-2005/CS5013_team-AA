@@ -234,4 +234,29 @@ public class CsvSensorParserTest {
         assertTrue(match.isHasSufficientMatches());
         assertTrue(match.getMatchCount() >= 590);
     }
+    @Test
+    @DisplayName("Should parse single unified CSV containing both velocity and acceleration")
+    void testParseUnifiedVehicleDynamicsCsv() {
+        String unifiedCsv = "timestamp,velocity,acceleration\n" +
+                "2026-10-11T14:30:00Z,15.5,0.42\n" +
+                "2026-10-11T14:30:01Z,18.0,0.55\n" +
+                "2026-10-11T14:30:02Z,20.2,0.30\n";
+
+        SensorParseResult vel = CsvSensorParser.parse(unifiedCsv, SensorType.VEHICLE_VELOCITY, "vehicle_dynamics.csv");
+        SensorParseResult acc = CsvSensorParser.parse(unifiedCsv, SensorType.VEHICLE_ACCELERATION, "vehicle_dynamics.csv");
+
+        assertTrue(vel.isSuccess());
+        assertEquals(3, vel.getValidDataPointsCount());
+        assertEquals(15.5, vel.getMinValue());
+        assertEquals(20.2, vel.getMaxValue());
+
+        assertTrue(acc.isSuccess());
+        assertEquals(3, acc.getValidDataPointsCount());
+        assertEquals(0.30, acc.getMinValue(), 1e-4);
+        assertEquals(0.55, acc.getMaxValue(), 1e-4);
+
+        MatchResult match = ExactTimestampMatcher.match(vel, acc, "Vehicle Velocity", "Vehicle Acceleration");
+        assertTrue(match.isHasSufficientMatches());
+        assertEquals(3, match.getMatchCount());
+    }
 }

@@ -85,7 +85,7 @@ public class ExactTimestampMatcher {
         if (!sufficient) {
             message = "Insufficient exact timestamp matches to plot this relationship (0 matches found out of "
                     + seriesX.getValidDataPointsCount() + " and " + seriesY.getValidDataPointsCount()
-                    + " records). As per midterm specifications, no clock offsets or interpolation are applied.";
+                    + " records). Exact timestamp equality is required; no clock offsets or interpolation are applied.";
         } else {
             message = "Identified " + count + " exact timestamp matches between " + seriesXLabel + " ("
                     + seriesX.getValidDataPointsCount() + " points) and " + seriesYLabel + " ("

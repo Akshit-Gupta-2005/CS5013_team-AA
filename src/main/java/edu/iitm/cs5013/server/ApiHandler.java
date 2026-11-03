@@ -26,12 +26,12 @@ public class ApiHandler implements HttpHandler {
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final Path sampleDataDir;
-    private final Path oct22DataDir;
+    private Path oct22DataDir;
 
     public ApiHandler(String sampleDataDirPath) {
         this.sampleDataDir = Paths.get(sampleDataDirPath);
         Path parent = this.sampleDataDir.getParent() != null ? this.sampleDataDir.getParent() : Paths.get(".");
-        this.oct22DataDir = parent.resolve("22 Oct 2026 collected data").resolve("22 Oct 2026");
+        this.oct22DataDir = resolveOct22Dir(this.sampleDataDir);
 
         this.mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         try {
@@ -149,14 +149,16 @@ public class ApiHandler implements HttpHandler {
         status.put("status", "UP");
         status.put("application", "Multi-Modal Transportation Data Visualization");
         status.put("runtime", System.getProperty("java.version"));
-        status.put("oct22DataAvailable", Files.exists(oct22DataDir) && Files.isDirectory(oct22DataDir));
+        Path octDir = getOct22DataDir();
+        status.put("oct22DataAvailable", octDir != null && Files.exists(octDir) && Files.isDirectory(octDir));
         sendJson(exchange, 200, status);
     }
 
     private void handleLoadOct22Data(HttpExchange exchange) throws IOException {
         Map<String, SensorParseResult> datasets = loadOct22Datasets();
-        if (datasets.isEmpty() && (!Files.exists(oct22DataDir) || !Files.isDirectory(oct22DataDir))) {
-            sendJson(exchange, 404, Map.of("error", "22 Oct 2026 collected data folder not found at: " + oct22DataDir));
+        Path octDir = getOct22DataDir();
+        if (datasets.isEmpty() && (octDir == null || !Files.exists(octDir) || !Files.isDirectory(octDir))) {
+            sendJson(exchange, 404, Map.of("error", "22 Oct 2026 collected data folder not found at: " + octDir));
             return;
         }
 
@@ -209,14 +211,23 @@ public class ApiHandler implements HttpHandler {
     }
 
     private Map<String, SensorParseResult> loadOct22Datasets() throws IOException {
-        if (!Files.exists(oct22DataDir) || !Files.isDirectory(oct22DataDir)) {
+        Path dataDir = getOct22DataDir();
+        if (dataDir == null || !Files.exists(dataDir) || !Files.isDirectory(dataDir)) {
             return Collections.emptyMap();
         }
 
         Map<String, SensorParseResult> datasets = new LinkedHashMap<>();
 
         // 1. Samsung Watch (HR and IBI)
-        Path samsungFile = oct22DataDir.resolve("Samsung watch (HR and IBI).csv");
+        Path samsungFile = dataDir.resolve("Samsung watch (HR and IBI).csv");
+        if (!Files.exists(samsungFile)) {
+            try (var stream = Files.list(dataDir)) {
+                samsungFile = stream.filter(p -> {
+                    String name = p.getFileName().toString().toLowerCase();
+                    return name.contains("samsung") && name.endsWith(".csv");
+                }).findFirst().orElse(samsungFile);
+            } catch (Exception ignored) {}
+        }
         if (Files.exists(samsungFile)) {
             String content = Files.readString(samsungFile, StandardCharsets.UTF_8);
             datasets.put(
@@ -226,7 +237,15 @@ public class ApiHandler implements HttpHandler {
         }
 
         // 2. GNSS + Polar Chest ECG Log
-        Path gnssFile = oct22DataDir.resolve("gnss_log_2026_10_22_16_41_32.csv");
+        Path gnssFile = dataDir.resolve("gnss_log_2026_10_22_16_41_32.csv");
+        if (!Files.exists(gnssFile)) {
+            try (var stream = Files.list(dataDir)) {
+                gnssFile = stream.filter(p -> {
+                    String name = p.getFileName().toString().toLowerCase();
+                    return name.contains("gnss") && name.endsWith(".csv");
+                }).findFirst().orElse(gnssFile);
+            } catch (Exception ignored) {}
+        }
         if (Files.exists(gnssFile)) {
             String gnssContent = Files.readString(gnssFile, StandardCharsets.UTF_8);
             String gnssName = gnssFile.getFileName().toString();
@@ -245,7 +264,15 @@ public class ApiHandler implements HttpHandler {
         }
 
         // 3. HealthyPi Watch (GSR) - merge all hs_record_*_gsr.csv chunks
-        Path gsrDir = oct22DataDir.resolve("Healthypi watch (GSR)");
+        Path gsrDir = dataDir.resolve("Healthypi watch (GSR)");
+        if (!Files.exists(gsrDir) || !Files.isDirectory(gsrDir)) {
+            try (var stream = Files.list(dataDir)) {
+                gsrDir = stream.filter(p -> {
+                    String name = p.getFileName().toString().toLowerCase();
+                    return (name.contains("healthypi") || name.contains("gsr")) && Files.isDirectory(p);
+                }).findFirst().orElse(gsrDir);
+            } catch (Exception ignored) {}
+        }
         if (Files.exists(gsrDir) && Files.isDirectory(gsrDir)) {
             List<Path> gsrFiles;
             try (var stream = Files.list(gsrDir)) {
@@ -335,5 +362,42 @@ public class ApiHandler implements HttpHandler {
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(bytes);
         }
+    }
+    private Path getOct22DataDir() {
+        if (oct22DataDir != null && Files.exists(oct22DataDir) && Files.isDirectory(oct22DataDir)) {
+            return oct22DataDir;
+        }
+        this.oct22DataDir = resolveOct22Dir(this.sampleDataDir);
+        return this.oct22DataDir;
+    }
+
+    private static Path resolveOct22Dir(Path sampleDataDir) {
+        Path currentDir = Paths.get(".").toAbsolutePath().normalize();
+        Path parent = sampleDataDir != null && sampleDataDir.getParent() != null
+                ? sampleDataDir.getParent().toAbsolutePath().normalize()
+                : currentDir;
+
+        List<Path> candidates = new ArrayList<>();
+        candidates.add(parent.resolve("22 Oct 2026"));
+        candidates.add(parent.resolve("22 Oct 2026 collected data").resolve("22 Oct 2026"));
+        candidates.add(parent.resolve("22 Oct 2026 collected data"));
+        candidates.add(currentDir.resolve("22 Oct 2026"));
+        candidates.add(currentDir.resolve("22 Oct 2026 collected data").resolve("22 Oct 2026"));
+        candidates.add(currentDir.resolve("22 Oct 2026 collected data"));
+        candidates.add(Paths.get("22 Oct 2026").toAbsolutePath().normalize());
+        candidates.add(Paths.get("22 Oct 2026 collected data", "22 Oct 2026").toAbsolutePath().normalize());
+        candidates.add(Paths.get("22 Oct 2026 collected data").toAbsolutePath().normalize());
+        if (parent.getParent() != null) {
+            candidates.add(parent.getParent().resolve("22 Oct 2026"));
+            candidates.add(parent.getParent().resolve("22 Oct 2026 collected data").resolve("22 Oct 2026"));
+            candidates.add(parent.getParent().resolve("22 Oct 2026 collected data"));
+        }
+
+        for (Path p : candidates) {
+            if (Files.exists(p) && Files.isDirectory(p)) {
+                return p;
+            }
+        }
+        return parent.resolve("22 Oct 2026");
     }
 }

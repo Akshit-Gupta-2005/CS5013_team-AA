@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -165,10 +166,32 @@ public class CsvSensorParserTest {
         assertTrue(res.getErrors().get(0).contains("GNSS motion log"));
     }
 
+    private Path getOct22Path(String... subPaths) {
+        List<Path> bases = List.of(
+                Paths.get("22 Oct 2026"),
+                Paths.get("22 Oct 2026 collected data", "22 Oct 2026"),
+                Paths.get("22 Oct 2026 collected data")
+        );
+        for (Path base : bases) {
+            Path target = base;
+            for (String sub : subPaths) {
+                target = target.resolve(sub);
+            }
+            if (Files.exists(target)) {
+                return target;
+            }
+        }
+        Path target = Paths.get("22 Oct 2026");
+        for (String sub : subPaths) {
+            target = target.resolve(sub);
+        }
+        return target;
+    }
+
     @Test
     @DisplayName("Should parse 22 Oct 2026 GNSS + Polar log for Velocity, Acceleration, and Polar Chest ECG HR")
     void testParseOct22GnssAndPolarLog() throws Exception {
-        Path path = Paths.get("22 Oct 2026 collected data", "22 Oct 2026", "gnss_log_2026_10_22_16_41_32.csv");
+        Path path = getOct22Path("gnss_log_2026_10_22_16_41_32.csv");
         if (!Files.exists(path)) return;
 
         String content = Files.readString(path);
@@ -194,8 +217,8 @@ public class CsvSensorParserTest {
     @Test
     @DisplayName("Should parse 22 Oct 2026 Samsung Watch (HR and IBI) and match with Polar Chest ECG & GNSS")
     void testParseOct22SamsungWatchAndMatch() throws Exception {
-        Path samsungPath = Paths.get("22 Oct 2026 collected data", "22 Oct 2026", "Samsung watch (HR and IBI).csv");
-        Path gnssPath = Paths.get("22 Oct 2026 collected data", "22 Oct 2026", "gnss_log_2026_10_22_16_41_32.csv");
+        Path samsungPath = getOct22Path("Samsung watch (HR and IBI).csv");
+        Path gnssPath = getOct22Path("gnss_log_2026_10_22_16_41_32.csv");
         if (!Files.exists(samsungPath) || !Files.exists(gnssPath)) return;
 
         String samsungContent = Files.readString(samsungPath);
@@ -217,8 +240,8 @@ public class CsvSensorParserTest {
     @Test
     @DisplayName("Should parse 22 Oct 2026 HealthyPi Watch GSR and match exact seconds with GNSS velocity")
     void testParseOct22HealthyPiGsrAndMatch() throws Exception {
-        Path gsrPath = Paths.get("22 Oct 2026 collected data", "22 Oct 2026", "Healthypi watch (GSR)", "hs_record_101_gsr.csv");
-        Path gnssPath = Paths.get("22 Oct 2026 collected data", "22 Oct 2026", "gnss_log_2026_10_22_16_41_32.csv");
+        Path gsrPath = getOct22Path("Healthypi watch (GSR)", "hs_record_101_gsr.csv");
+        Path gnssPath = getOct22Path("gnss_log_2026_10_22_16_41_32.csv");
         if (!Files.exists(gsrPath) || !Files.exists(gnssPath)) return;
 
         String gsrContent = Files.readString(gsrPath);

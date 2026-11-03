@@ -1,0 +1,26 @@
+var searchData=
+[
+  ['main_0',['Main',['../classedu_1_1iitm_1_1cs5013_1_1_main.html',1,'edu::iitm::cs5013']]],
+  ['main_1',['main',['../classedu_1_1iitm_1_1cs5013_1_1_main.html#a08a04a57d5e6e084ef917c4f58f0f2fd',1,'edu::iitm::cs5013::Main']]],
+  ['main_2ejava_2',['Main.java',['../_main_8java.html',1,'']]],
+  ['manual_20upload_3',['Option B: Step-by-Step Manual Upload',['../index.html#autotoc_md28',1,'']]],
+  ['mapper_4',['mapper',['../classedu_1_1iitm_1_1cs5013_1_1server_1_1_api_handler.html#a85c3ae12332f7356b3e6401b95780419',1,'edu::iitm::cs5013::server::ApiHandler']]],
+  ['match_5',['match',['../classedu_1_1iitm_1_1cs5013_1_1matcher_1_1_exact_timestamp_matcher.html#a106fa317953bcaceafaf4de1fc4034d6',1,'edu::iitm::cs5013::matcher::ExactTimestampMatcher']]],
+  ['matchcount_6',['matchCount',['../classedu_1_1iitm_1_1cs5013_1_1model_1_1_match_result.html#ab70d151621c5ea0d9443d3c9b6eb5032',1,'edu::iitm::cs5013::model::MatchResult']]],
+  ['matchedpoints_7',['matchedPoints',['../classedu_1_1iitm_1_1cs5013_1_1model_1_1_match_result.html#ab4d0277dd24deddee4ee78de25554209',1,'edu::iitm::cs5013::model::MatchResult']]],
+  ['matchresult_8',['MatchResult',['../classedu_1_1iitm_1_1cs5013_1_1model_1_1_match_result.html',1,'edu.iitm.cs5013.model.MatchResult'],['../classedu_1_1iitm_1_1cs5013_1_1model_1_1_match_result.html#a0ca71d5041a38ed81de22b0f800a0378',1,'edu.iitm.cs5013.model.MatchResult.MatchResult()']]],
+  ['matchresult_2ejava_9',['MatchResult.java',['../_match_result_8java.html',1,'']]],
+  ['maxepochmillis_10',['maxEpochMillis',['../classedu_1_1iitm_1_1cs5013_1_1model_1_1_sensor_parse_result.html#ab709ea2d087a861b4793f5aeef327002',1,'edu::iitm::cs5013::model::SensorParseResult']]],
+  ['maxformattedtime_11',['maxFormattedTime',['../classedu_1_1iitm_1_1cs5013_1_1model_1_1_sensor_parse_result.html#a234702de93f9e77e202dcd40c604de9d',1,'edu::iitm::cs5013::model::SensorParseResult']]],
+  ['maxvalue_12',['maxValue',['../classedu_1_1iitm_1_1cs5013_1_1model_1_1_sensor_parse_result.html#aa86b32f8997cf54b42c9940a6d0de2ca',1,'edu::iitm::cs5013::model::SensorParseResult']]],
+  ['message_13',['message',['../classedu_1_1iitm_1_1cs5013_1_1model_1_1_match_result.html#a2f6da4250b7711dc66927cdc3f4a70f1',1,'edu::iitm::cs5013::model::MatchResult']]],
+  ['metadata_14',['9. Contributors &amp; Academic Metadata',['../index.html#autotoc_md32',1,'']]],
+  ['milestone_15',['CS5013: Principles of Analytics and Intelligence &amp;bull; Project Milestone',['../index.html#autotoc_md2',1,'']]],
+  ['minepochmillis_16',['minEpochMillis',['../classedu_1_1iitm_1_1cs5013_1_1model_1_1_sensor_parse_result.html#a8cdfdf494fe7d9079c802967a54e67f3',1,'edu::iitm::cs5013::model::SensorParseResult']]],
+  ['minformattedtime_17',['minFormattedTime',['../classedu_1_1iitm_1_1cs5013_1_1model_1_1_sensor_parse_result.html#a11d333ac785388ee220aad20407a4336',1,'edu::iitm::cs5013::model::SensorParseResult']]],
+  ['minvalue_18',['minValue',['../classedu_1_1iitm_1_1cs5013_1_1model_1_1_sensor_parse_result.html#ad3272218330c5e894ee68156d7a6bcbf',1,'edu::iitm::cs5013::model::SensorParseResult']]],
+  ['modal_20field_20study_20data_20recommended_19',['Option A: Real-World Multi-Modal Field Study Data (Recommended)',['../index.html#autotoc_md27',1,'']]],
+  ['modal_20transportation_20data_20fusion_20visualization_20platform_20',['Multi-Modal Transportation Data Fusion &amp; Visualization Platform',['../index.html',1,'']]],
+  ['multi_20modal_20field_20study_20data_20recommended_21',['Option A: Real-World Multi-Modal Field Study Data (Recommended)',['../index.html#autotoc_md27',1,'']]],
+  ['multi_20modal_20transportation_20data_20fusion_20visualization_20platform_22',['Multi-Modal Transportation Data Fusion &amp; Visualization Platform',['../index.html',1,'']]]
+];

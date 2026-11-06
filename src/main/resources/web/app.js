@@ -17,6 +17,13 @@ const appState = {
         hrVel: 'sw',   // 'sw' or 'chest'
         hrAcc: 'sw',   // 'sw' or 'chest'
         gsrRel: 'vel'  // 'vel', 'acc', 'sw', 'chest'
+    },
+    showTrendlines: {
+        hrVel: true,
+        hrAcc: true,
+        velAcc: true,
+        hrAgree: true,
+        gsrRel: true
     }
 };
 
@@ -658,6 +665,21 @@ function initSubToggles() {
                 updateChartGsrRel();
             });
         }
+    });
+
+    // Trendline toggles
+    document.querySelectorAll('.btn-trendline-toggle').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetKey = btn.getAttribute('data-trendline-target');
+            if (!targetKey) return;
+            appState.showTrendlines[targetKey] = !appState.showTrendlines[targetKey];
+            btn.classList.toggle('active', appState.showTrendlines[targetKey]);
+            if (targetKey === 'hrVel') updateChartHrVsVel();
+            else if (targetKey === 'hrAcc') updateChartHrVsAcc();
+            else if (targetKey === 'velAcc') updateChartVelVsAcc();
+            else if (targetKey === 'hrAgree') updateChartHrAgreement();
+            else if (targetKey === 'gsrRel') updateChartGsrRel();
+        });
     });
 }
 
@@ -1365,10 +1387,103 @@ function exactMatchStreams(streamX, streamY) {
         }
     });
 
+    const n = matched.length;
+    if (n === 0) {
+        return { count: 0, points: [], sufficient: false };
+    }
+
+    let sumX = 0, sumY = 0, sumDiff = 0, sumAbsDiff = 0, sumSqDiff = 0;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+    for (let i = 0; i < n; i++) {
+        const x = matched[i].x;
+        const y = matched[i].y;
+        const diff = y - x;
+        sumX += x;
+        sumY += y;
+        sumDiff += diff;
+        sumAbsDiff += Math.abs(diff);
+        sumSqDiff += diff * diff;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+    }
+
+    const meanX = sumX / n;
+    const meanY = sumY / n;
+    const meanDiff = sumDiff / n;
+    const mae = sumAbsDiff / n;
+    const rmse = Math.sqrt(sumSqDiff / n);
+
+    let sxx = 0, syy = 0, sxy = 0, sdd = 0;
+    for (let i = 0; i < n; i++) {
+        const dx = matched[i].x - meanX;
+        const dy = matched[i].y - meanY;
+        const dd = (matched[i].y - matched[i].x) - meanDiff;
+        sxx += dx * dx;
+        syy += dy * dy;
+        sxy += dx * dy;
+        sdd += dd * dd;
+    }
+
+    const stdDiff = Math.sqrt(sdd / n);
+    const pearsonR = (n >= 2 && sxx > 1e-12 && syy > 1e-12) ? (sxy / Math.sqrt(sxx * syy)) : null;
+    const rSquared = pearsonR !== null ? pearsonR * pearsonR : null;
+    const slope = (n >= 2 && sxx > 1e-12) ? (sxy / sxx) : null;
+    const intercept = slope !== null ? (meanY - slope * meanX) : null;
+
     return {
-        count: matched.length,
+        count: n,
         points: matched,
-        sufficient: matched.length > 0
+        sufficient: true,
+        minX,
+        maxX,
+        minY,
+        maxY,
+        meanX,
+        meanY,
+        pearsonR,
+        rSquared,
+        slope,
+        intercept,
+        meanDiff,
+        stdDiff,
+        mae,
+        rmse,
+        loaUpper: meanDiff + 1.96 * stdDiff,
+        loaLower: meanDiff - 1.96 * stdDiff
+    };
+}
+
+function describeCorrelation(r) {
+    if (r === null || r === undefined || isNaN(r)) return 'Constant / N/A';
+    const absR = Math.abs(r);
+    const dir = r >= 0 ? 'Positive' : 'Negative';
+    if (absR >= 0.7) return `Strong ${dir} (${r >= 0 ? '+' : ''}${r.toFixed(3)})`;
+    if (absR >= 0.4) return `Moderate ${dir} (${r >= 0 ? '+' : ''}${r.toFixed(3)})`;
+    if (absR >= 0.15) return `Weak ${dir} (${r >= 0 ? '+' : ''}${r.toFixed(3)})`;
+    return `Negligible Linear (${r >= 0 ? '+' : ''}${r.toFixed(3)})`;
+}
+
+function buildTrendlineDataset(match, label, color) {
+    if (!match || match.slope === null || match.intercept === null || match.minX >= match.maxX) {
+        return null;
+    }
+    return {
+        type: 'line',
+        label: label || 'OLS Linear Fit',
+        data: [
+            { x: match.minX, y: match.slope * match.minX + match.intercept, time: 'OLS Fit Start' },
+            { x: match.maxX, y: match.slope * match.maxX + match.intercept, time: 'OLS Fit End' }
+        ],
+        borderColor: color || '#0f172a',
+        borderWidth: 2.2,
+        borderDash: [6, 4],
+        pointRadius: 0,
+        pointHoverRadius: 0,
+        fill: false,
+        tension: 0
     };
 }
 
@@ -1381,6 +1496,7 @@ function updateChartHrVsVel() {
     const hr = isSw ? appState.datasets.smartwatch_heart_rate : appState.datasets.chest_ecg_heart_rate;
     const titleEl = document.getElementById('titleHrVel');
     const badgeEl = document.getElementById('matchBadgeHrVel');
+    const statsStrip = document.getElementById('statsStripHrVel');
     const canvas = document.getElementById('chartHrVsVel');
     if (!canvas) return;
 
@@ -1390,6 +1506,7 @@ function updateChartHrVsVel() {
     if (!vel || !hr) {
         const missing = !vel && !hr ? 'both Velocity and Heart Rate CSVs' : (!vel ? 'Vehicle Velocity CSV' : `${hrLabel} CSV`);
         toggleEmptyState('chartHrVsVel', true, 'Missing Data File(s)', `Please upload ${missing} above to enable this scatter plot.`);
+        if (statsStrip) statsStrip.classList.add('hidden');
         if (badgeEl) {
             badgeEl.className = 'match-badge';
             badgeEl.textContent = 'Awaiting file uploads';
@@ -1406,6 +1523,7 @@ function updateChartHrVsVel() {
     if (!match.sufficient) {
         toggleEmptyState('chartHrVsVel', true, 'Insufficient exact timestamp matches to plot this relationship.',
             '0 exact timestamp matches found between recorded timestamps. Exact timestamp equality is required; no clock offsets or interpolation are applied.');
+        if (statsStrip) statsStrip.classList.add('hidden');
         if (badgeEl) {
             badgeEl.className = 'match-badge unmatched';
             badgeEl.textContent = '0 exact matches';
@@ -1423,10 +1541,20 @@ function updateChartHrVsVel() {
         badgeEl.textContent = `${match.count.toLocaleString()} exact matches paired`;
     }
 
+    if (statsStrip) {
+        statsStrip.classList.remove('hidden');
+        document.getElementById('statHrVelR').textContent = match.pearsonR !== null ? match.pearsonR.toFixed(4) : 'N/A';
+        document.getElementById('statHrVelR2').textContent = match.rSquared !== null ? match.rSquared.toFixed(4) : 'N/A';
+        document.getElementById('statHrVelEq').textContent = match.slope !== null
+            ? `HR = ${match.slope >= 0 ? '+' : ''}${match.slope.toFixed(3)}·Vel + ${match.intercept.toFixed(1)}`
+            : 'N/A';
+        document.getElementById('statHrVelStrength').textContent = describeCorrelation(match.pearsonR);
+    }
+
     const scatterData = match.points.map(pt => ({ x: pt.x, y: pt.y, time: pt.formattedTime }));
     const color = isSw ? SENSOR_CONFIG.smartwatch_heart_rate.color : SENSOR_CONFIG.chest_ecg_heart_rate.color;
 
-    const dataset = {
+    const datasets = [{
         label: `${hrLabel} vs Velocity`,
         data: scatterData,
         backgroundColor: color,
@@ -1434,24 +1562,31 @@ function updateChartHrVsVel() {
         borderWidth: 1,
         pointRadius: match.points.length > 2000 ? 1.8 : 4,
         pointHoverRadius: match.points.length > 2000 ? 4 : 7
-    };
+    }];
+
+    if (appState.showTrendlines.hrVel) {
+        const trendDs = buildTrendlineDataset(match, 'OLS Linear Trendline', '#0f172a');
+        if (trendDs) datasets.push(trendDs);
+    }
 
     if (appState.charts.hrVsVel) {
-        appState.charts.hrVsVel.data.datasets = [dataset];
+        appState.charts.hrVsVel.data.datasets = datasets;
         appState.charts.hrVsVel.update();
     } else {
         appState.charts.hrVsVel = new Chart(canvas, {
             type: 'scatter',
-            data: { datasets: [dataset] },
+            data: { datasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: { duration: 300 },
                 plugins: {
-                    legend: { display: false },
+                    legend: { display: true, position: 'top' },
                     tooltip: {
                         callbacks: {
-                            label: (item) => ` Speed: ${item.parsed.x.toFixed(1)} km/h | HR: ${item.parsed.y.toFixed(1)} BPM (${item.raw.time})`
+                            label: (item) => item.dataset.type === 'line'
+                                ? ` OLS Fit: ${item.parsed.y.toFixed(1)} BPM at ${item.parsed.x.toFixed(1)} km/h`
+                                : ` Speed: ${item.parsed.x.toFixed(1)} km/h | HR: ${item.parsed.y.toFixed(1)} BPM (${item.raw.time})`
                         }
                     }
                 },
@@ -1477,6 +1612,7 @@ function updateChartHrVsAcc() {
     const hr = isSw ? appState.datasets.smartwatch_heart_rate : appState.datasets.chest_ecg_heart_rate;
     const titleEl = document.getElementById('titleHrAcc');
     const badgeEl = document.getElementById('matchBadgeHrAcc');
+    const statsStrip = document.getElementById('statsStripHrAcc');
     const canvas = document.getElementById('chartHrVsAcc');
     if (!canvas) return;
 
@@ -1486,6 +1622,7 @@ function updateChartHrVsAcc() {
     if (!acc || !hr) {
         const missing = !acc && !hr ? 'both Acceleration and Heart Rate CSVs' : (!acc ? 'Vehicle Acceleration CSV' : `${hrLabel} CSV`);
         toggleEmptyState('chartHrVsAcc', true, 'Missing Data File(s)', `Please upload ${missing} above to enable this scatter plot.`);
+        if (statsStrip) statsStrip.classList.add('hidden');
         if (badgeEl) {
             badgeEl.className = 'match-badge';
             badgeEl.textContent = 'Awaiting file uploads';
@@ -1502,6 +1639,7 @@ function updateChartHrVsAcc() {
     if (!match.sufficient) {
         toggleEmptyState('chartHrVsAcc', true, 'Insufficient exact timestamp matches to plot this relationship.',
             '0 exact timestamp matches found between recorded timestamps. Exact timestamp equality is required; no clock offsets or interpolation are applied.');
+        if (statsStrip) statsStrip.classList.add('hidden');
         if (badgeEl) {
             badgeEl.className = 'match-badge unmatched';
             badgeEl.textContent = '0 exact matches';
@@ -1519,10 +1657,20 @@ function updateChartHrVsAcc() {
         badgeEl.textContent = `${match.count.toLocaleString()} exact matches paired`;
     }
 
+    if (statsStrip) {
+        statsStrip.classList.remove('hidden');
+        document.getElementById('statHrAccR').textContent = match.pearsonR !== null ? match.pearsonR.toFixed(4) : 'N/A';
+        document.getElementById('statHrAccR2').textContent = match.rSquared !== null ? match.rSquared.toFixed(4) : 'N/A';
+        document.getElementById('statHrAccEq').textContent = match.slope !== null
+            ? `HR = ${match.slope >= 0 ? '+' : ''}${match.slope.toFixed(3)}·Acc + ${match.intercept.toFixed(1)}`
+            : 'N/A';
+        document.getElementById('statHrAccStrength').textContent = describeCorrelation(match.pearsonR);
+    }
+
     const scatterData = match.points.map(pt => ({ x: pt.x, y: pt.y, time: pt.formattedTime }));
     const color = isSw ? SENSOR_CONFIG.smartwatch_heart_rate.color : SENSOR_CONFIG.chest_ecg_heart_rate.color;
 
-    const dataset = {
+    const datasets = [{
         label: `${hrLabel} vs Acceleration`,
         data: scatterData,
         backgroundColor: color,
@@ -1530,24 +1678,31 @@ function updateChartHrVsAcc() {
         borderWidth: 1,
         pointRadius: match.points.length > 2000 ? 1.8 : 4,
         pointHoverRadius: match.points.length > 2000 ? 4 : 7
-    };
+    }];
+
+    if (appState.showTrendlines.hrAcc) {
+        const trendDs = buildTrendlineDataset(match, 'OLS Linear Trendline', '#0f172a');
+        if (trendDs) datasets.push(trendDs);
+    }
 
     if (appState.charts.hrVsAcc) {
-        appState.charts.hrVsAcc.data.datasets = [dataset];
+        appState.charts.hrVsAcc.data.datasets = datasets;
         appState.charts.hrVsAcc.update();
     } else {
         appState.charts.hrVsAcc = new Chart(canvas, {
             type: 'scatter',
-            data: { datasets: [dataset] },
+            data: { datasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: { duration: 300 },
                 plugins: {
-                    legend: { display: false },
+                    legend: { display: true, position: 'top' },
                     tooltip: {
                         callbacks: {
-                            label: (item) => ` Accel: ${item.parsed.x.toFixed(2)} m/s² | HR: ${item.parsed.y.toFixed(1)} BPM (${item.raw.time})`
+                            label: (item) => item.dataset.type === 'line'
+                                ? ` OLS Fit: ${item.parsed.y.toFixed(1)} BPM at ${item.parsed.x.toFixed(2)} m/s²`
+                                : ` Accel: ${item.parsed.x.toFixed(2)} m/s² | HR: ${item.parsed.y.toFixed(1)} BPM (${item.raw.time})`
                         }
                     }
                 },
@@ -1575,11 +1730,13 @@ function updateChartVelVsAcc() {
     const vel = appState.datasets.vehicle_velocity;
     const acc = appState.datasets.vehicle_acceleration;
     const badgeEl = document.getElementById('matchBadgeVelAcc');
+    const statsStrip = document.getElementById('statsStripVelAcc');
     const canvas = document.getElementById('chartVelVsAcc');
     if (!canvas) return;
 
     if (!vel || !acc) {
         toggleEmptyState('chartVelVsAcc', true, 'Upload Motion Streams', 'Requires both Vehicle Velocity CSV and Vehicle Acceleration CSV.');
+        if (statsStrip) statsStrip.classList.add('hidden');
         if (badgeEl) {
             badgeEl.className = 'match-badge';
             badgeEl.textContent = 'Awaiting velocity & acceleration';
@@ -1596,6 +1753,7 @@ function updateChartVelVsAcc() {
     if (!match.sufficient) {
         toggleEmptyState('chartVelVsAcc', true, 'Insufficient exact timestamp matches to plot this relationship.',
             '0 exact timestamp matches found between velocity and acceleration streams.');
+        if (statsStrip) statsStrip.classList.add('hidden');
         if (badgeEl) {
             badgeEl.className = 'match-badge unmatched';
             badgeEl.textContent = '0 exact matches';
@@ -1613,7 +1771,17 @@ function updateChartVelVsAcc() {
         badgeEl.textContent = `${match.count.toLocaleString()} exact matches paired`;
     }
 
-    const dataset = {
+    if (statsStrip) {
+        statsStrip.classList.remove('hidden');
+        document.getElementById('statVelAccR').textContent = match.pearsonR !== null ? match.pearsonR.toFixed(4) : 'N/A';
+        document.getElementById('statVelAccR2').textContent = match.rSquared !== null ? match.rSquared.toFixed(4) : 'N/A';
+        document.getElementById('statVelAccEq').textContent = match.slope !== null
+            ? `Acc = ${match.slope >= 0 ? '+' : ''}${match.slope.toFixed(4)}·Vel + ${match.intercept.toFixed(2)}`
+            : 'N/A';
+        document.getElementById('statVelAccStrength').textContent = describeCorrelation(match.pearsonR);
+    }
+
+    const datasets = [{
         label: 'Velocity vs Acceleration',
         data: match.points.map(pt => ({ x: pt.x, y: pt.y, time: pt.formattedTime })),
         backgroundColor: '#0d9488',
@@ -1621,24 +1789,31 @@ function updateChartVelVsAcc() {
         borderWidth: 1,
         pointRadius: match.points.length > 2000 ? 1.8 : 4,
         pointHoverRadius: match.points.length > 2000 ? 4 : 7
-    };
+    }];
+
+    if (appState.showTrendlines.velAcc) {
+        const trendDs = buildTrendlineDataset(match, 'OLS Linear Trendline', '#0f172a');
+        if (trendDs) datasets.push(trendDs);
+    }
 
     if (appState.charts.velVsAcc) {
-        appState.charts.velVsAcc.data.datasets = [dataset];
+        appState.charts.velVsAcc.data.datasets = datasets;
         appState.charts.velVsAcc.update();
     } else {
         appState.charts.velVsAcc = new Chart(canvas, {
             type: 'scatter',
-            data: { datasets: [dataset] },
+            data: { datasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: { duration: 300 },
                 plugins: {
-                    legend: { display: false },
+                    legend: { display: true, position: 'top' },
                     tooltip: {
                         callbacks: {
-                            label: (item) => ` Velocity: ${item.parsed.x.toFixed(1)} km/h | Accel: ${item.parsed.y.toFixed(2)} m/s² (${item.raw.time})`
+                            label: (item) => item.dataset.type === 'line'
+                                ? ` OLS Fit: ${item.parsed.y.toFixed(2)} m/s² at ${item.parsed.x.toFixed(1)} km/h`
+                                : ` Velocity: ${item.parsed.x.toFixed(1)} km/h | Accel: ${item.parsed.y.toFixed(2)} m/s² (${item.raw.time})`
                         }
                     }
                 },
@@ -1666,6 +1841,7 @@ function updateChartHrAgreement() {
     const sw = appState.datasets.smartwatch_heart_rate;
     const chest = appState.datasets.chest_ecg_heart_rate;
     const badgeEl = document.getElementById('matchBadgeHrAgreement');
+    const statsStrip = document.getElementById('statsStripHrAgree');
     const canvasScatter = document.getElementById('chartHrScatterAgreement');
     const canvasDiff = document.getElementById('chartHrDiffTimeline');
     if (!canvasScatter || !canvasDiff) return;
@@ -1673,6 +1849,7 @@ function updateChartHrAgreement() {
     if (!sw || !chest) {
         toggleEmptyState('chartHrScatterAgreement', true, 'Upload Both Heart Rate Files', 'Requires Smartwatch Heart Rate and Chest ECG Monitor CSVs.');
         toggleEmptyState('chartHrDiffTimeline', true, 'Upload Both Heart Rate Files', 'Requires Smartwatch Heart Rate and Chest ECG Monitor CSVs.');
+        if (statsStrip) statsStrip.classList.add('hidden');
         if (badgeEl) {
             badgeEl.className = 'match-badge';
             badgeEl.textContent = 'Awaiting both heart rate streams';
@@ -1693,6 +1870,7 @@ function updateChartHrAgreement() {
     if (!match.sufficient) {
         toggleEmptyState('chartHrScatterAgreement', true, 'Insufficient exact timestamp matches.', '0 exact timestamp matches between smartwatch and chest monitor.');
         toggleEmptyState('chartHrDiffTimeline', true, 'Insufficient exact timestamp matches.', '0 exact timestamp matches between smartwatch and chest monitor.');
+        if (statsStrip) statsStrip.classList.add('hidden');
         if (badgeEl) {
             badgeEl.className = 'match-badge unmatched';
             badgeEl.textContent = '0 exact matches';
@@ -1715,31 +1893,61 @@ function updateChartHrAgreement() {
         badgeEl.textContent = `${match.count.toLocaleString()} synchronized seconds`;
     }
 
-    const scatterDataset = {
-        label: 'Heart Rate Agreement',
+    if (statsStrip) {
+        statsStrip.classList.remove('hidden');
+        document.getElementById('statHrAgreeR').textContent = match.pearsonR !== null ? match.pearsonR.toFixed(4) : 'N/A';
+        document.getElementById('statHrAgreeBias').textContent = `${match.meanDiff >= 0 ? '+' : ''}${match.meanDiff.toFixed(2)} BPM (SD ${match.stdDiff.toFixed(2)})`;
+        document.getElementById('statHrAgreeLoa').textContent = `[${match.loaLower >= 0 ? '+' : ''}${match.loaLower.toFixed(2)}, ${match.loaUpper >= 0 ? '+' : ''}${match.loaUpper.toFixed(2)}] BPM`;
+        document.getElementById('statHrAgreeErr').textContent = `${match.mae.toFixed(2)} / ${match.rmse.toFixed(2)} BPM`;
+    }
+
+    const scatterDatasets = [{
+        label: 'Watch vs Chest HR',
         data: match.points.map(pt => ({ x: pt.x, y: pt.y, time: pt.formattedTime })),
         backgroundColor: '#4f46e5',
         borderColor: 'white',
         borderWidth: 1,
         pointRadius: match.points.length > 2000 ? 2 : 4
-    };
+    }];
+
+    if (appState.showTrendlines.hrAgree) {
+        const minBound = Math.min(match.minX, match.minY);
+        const maxBound = Math.max(match.maxX, match.maxY);
+        scatterDatasets.push({
+            type: 'line',
+            label: 'Identity (y = x)',
+            data: [
+                { x: minBound, y: minBound, time: 'Identity' },
+                { x: maxBound, y: maxBound, time: 'Identity' }
+            ],
+            borderColor: '#64748b',
+            borderWidth: 1.5,
+            borderDash: [4, 4],
+            pointRadius: 0,
+            fill: false
+        });
+        const trendDs = buildTrendlineDataset(match, 'OLS Linear Fit', '#0f172a');
+        if (trendDs) scatterDatasets.push(trendDs);
+    }
 
     if (appState.charts.hrScatterAgree) {
-        appState.charts.hrScatterAgree.data.datasets = [scatterDataset];
+        appState.charts.hrScatterAgree.data.datasets = scatterDatasets;
         appState.charts.hrScatterAgree.update();
     } else {
         appState.charts.hrScatterAgree = new Chart(canvasScatter, {
             type: 'scatter',
-            data: { datasets: [scatterDataset] },
+            data: { datasets: scatterDatasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: { duration: 300 },
                 plugins: {
-                    legend: { display: false },
+                    legend: { display: true, position: 'top' },
                     tooltip: {
                         callbacks: {
-                            label: (item) => ` Chest ECG: ${item.parsed.x.toFixed(1)} BPM | Watch: ${item.parsed.y.toFixed(1)} BPM (${item.raw.time})`
+                            label: (item) => item.dataset.type === 'line'
+                                ? ` ${item.dataset.label}: ${item.parsed.y.toFixed(1)} BPM`
+                                : ` Chest ECG: ${item.parsed.x.toFixed(1)} BPM | Watch: ${item.parsed.y.toFixed(1)} BPM (${item.raw.time})`
                         }
                     }
                 },
@@ -1751,33 +1959,67 @@ function updateChartHrAgreement() {
         });
     }
 
-    const diffDataset = {
-        label: 'Δ HR (Smartwatch − Chest ECG)',
+    const firstEpoch = match.points[0].epochMillis;
+    const lastEpoch = match.points[match.points.length - 1].epochMillis;
+    const diffDatasets = [{
+        label: 'Δ HR (Watch − Chest)',
         data: match.points.map(pt => ({ x: pt.epochMillis, y: pt.y - pt.x, time: pt.formattedTime })),
         borderColor: '#db2777',
         backgroundColor: 'rgba(219, 39, 119, 0.2)',
         borderWidth: match.points.length > 2000 ? 1.5 : 2,
         pointRadius: match.points.length > 2000 ? 0 : 2,
         tension: 0.1
-    };
+    }];
+
+    if (appState.showTrendlines.hrAgree && firstEpoch < lastEpoch) {
+        diffDatasets.push(
+            {
+                label: `Mean Bias (${match.meanDiff >= 0 ? '+' : ''}${match.meanDiff.toFixed(2)})`,
+                data: [{ x: firstEpoch, y: match.meanDiff, time: 'Mean Bias' }, { x: lastEpoch, y: match.meanDiff, time: 'Mean Bias' }],
+                borderColor: '#0f172a',
+                borderWidth: 1.8,
+                borderDash: [6, 4],
+                pointRadius: 0,
+                fill: false
+            },
+            {
+                label: `+1.96 SD (${match.loaUpper >= 0 ? '+' : ''}${match.loaUpper.toFixed(1)})`,
+                data: [{ x: firstEpoch, y: match.loaUpper, time: '+1.96 SD' }, { x: lastEpoch, y: match.loaUpper, time: '+1.96 SD' }],
+                borderColor: '#64748b',
+                borderWidth: 1.3,
+                borderDash: [3, 3],
+                pointRadius: 0,
+                fill: false
+            },
+            {
+                label: `-1.96 SD (${match.loaLower >= 0 ? '+' : ''}${match.loaLower.toFixed(1)})`,
+                data: [{ x: firstEpoch, y: match.loaLower, time: '-1.96 SD' }, { x: lastEpoch, y: match.loaLower, time: '-1.96 SD' }],
+                borderColor: '#64748b',
+                borderWidth: 1.3,
+                borderDash: [3, 3],
+                pointRadius: 0,
+                fill: false
+            }
+        );
+    }
 
     if (appState.charts.hrDiffTime) {
-        appState.charts.hrDiffTime.data.datasets = [diffDataset];
+        appState.charts.hrDiffTime.data.datasets = diffDatasets;
         appState.charts.hrDiffTime.update();
     } else {
         appState.charts.hrDiffTime = new Chart(canvasDiff, {
             type: 'line',
-            data: { datasets: [diffDataset] },
+            data: { datasets: diffDatasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: { duration: 300 },
                 plugins: {
-                    legend: { display: false },
+                    legend: { display: true, position: 'top' },
                     tooltip: {
                         callbacks: {
-                            title: (items) => items.length ? items[0].raw.time : '',
-                            label: (item) => ` Difference (Watch − Chest): ${item.parsed.y > 0 ? '+' : ''}${item.parsed.y.toFixed(1)} BPM`
+                            title: (items) => items.length ? (items[0].raw.time || '') : '',
+                            label: (item) => ` ${item.dataset.label}: ${item.parsed.y > 0 ? '+' : ''}${item.parsed.y.toFixed(2)} BPM`
                         }
                     }
                 },
@@ -1809,6 +2051,7 @@ function updateChartGsrRel() {
     const titleEl = document.getElementById('titleGsrRel');
     const subEl = document.getElementById('subtitleGsrRel');
     const badgeEl = document.getElementById('matchBadgeGsrRel');
+    const statsStrip = document.getElementById('statsStripGsrRel');
     const canvas = document.getElementById('chartGsrRel');
     if (!canvas) return;
 
@@ -1826,6 +2069,7 @@ function updateChartGsrRel() {
     if (!gsr || !target.ds) {
         const missing = !gsr && !target.ds ? `HealthyPi GSR and ${target.label}` : (!gsr ? 'HealthyPi Watch (GSR)' : target.label);
         toggleEmptyState('chartGsrRel', true, 'Missing Data Stream(s)', `Please upload ${missing} to explore this relationship.`);
+        if (statsStrip) statsStrip.classList.add('hidden');
         if (badgeEl) {
             badgeEl.className = 'match-badge';
             badgeEl.textContent = 'Awaiting file uploads';
@@ -1842,6 +2086,7 @@ function updateChartGsrRel() {
     if (!match.sufficient) {
         toggleEmptyState('chartGsrRel', true, 'Insufficient exact timestamp matches to plot this relationship.',
             '0 exact timestamp matches found between recorded timestamps.');
+        if (statsStrip) statsStrip.classList.add('hidden');
         if (badgeEl) {
             badgeEl.className = 'match-badge unmatched';
             badgeEl.textContent = '0 exact matches';
@@ -1859,7 +2104,17 @@ function updateChartGsrRel() {
         badgeEl.textContent = `${match.count.toLocaleString()} exact matches paired`;
     }
 
-    const dataset = {
+    if (statsStrip) {
+        statsStrip.classList.remove('hidden');
+        document.getElementById('statGsrRelR').textContent = match.pearsonR !== null ? match.pearsonR.toFixed(4) : 'N/A';
+        document.getElementById('statGsrRelR2').textContent = match.rSquared !== null ? match.rSquared.toFixed(4) : 'N/A';
+        document.getElementById('statGsrRelEq').textContent = match.slope !== null
+            ? `GSR = ${match.slope >= 0 ? '+' : ''}${match.slope.toFixed(2)}·X + ${match.intercept.toFixed(1)}`
+            : 'N/A';
+        document.getElementById('statGsrRelStrength').textContent = describeCorrelation(match.pearsonR);
+    }
+
+    const datasets = [{
         label: `GSR vs ${target.label}`,
         data: match.points.map(pt => ({ x: pt.x, y: pt.y, time: pt.formattedTime })),
         backgroundColor: target.color,
@@ -1867,25 +2122,32 @@ function updateChartGsrRel() {
         borderWidth: 1,
         pointRadius: match.points.length > 2000 ? 1.8 : 4,
         pointHoverRadius: match.points.length > 2000 ? 4 : 7
-    };
+    }];
+
+    if (appState.showTrendlines.gsrRel) {
+        const trendDs = buildTrendlineDataset(match, 'OLS Linear Trendline', '#0f172a');
+        if (trendDs) datasets.push(trendDs);
+    }
 
     if (appState.charts.gsrRel) {
-        appState.charts.gsrRel.data.datasets = [dataset];
+        appState.charts.gsrRel.data.datasets = datasets;
         appState.charts.gsrRel.options.scales.x.title.text = `${target.label} (${target.unit})`;
         appState.charts.gsrRel.update();
     } else {
         appState.charts.gsrRel = new Chart(canvas, {
             type: 'scatter',
-            data: { datasets: [dataset] },
+            data: { datasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: { duration: 300 },
                 plugins: {
-                    legend: { display: false },
+                    legend: { display: true, position: 'top' },
                     tooltip: {
                         callbacks: {
-                            label: (item) => ` ${target.label}: ${item.parsed.x.toFixed(2)} ${target.unit} | GSR: ${item.parsed.y.toFixed(2)} (${item.raw.time})`
+                            label: (item) => item.dataset.type === 'line'
+                                ? ` OLS Fit: ${item.parsed.y.toFixed(2)} at ${item.parsed.x.toFixed(2)} ${target.unit}`
+                                : ` ${target.label}: ${item.parsed.x.toFixed(2)} ${target.unit} | GSR: ${item.parsed.y.toFixed(2)} (${item.raw.time})`
                         }
                     }
                 },
@@ -2530,6 +2792,8 @@ function generateMatchedCsv(relationType) {
 
         let csv = `\uFEFF# CS5013 Matched Relationship: ${hrName} vs Vehicle Velocity\r\n`;
         csv += `# Total Synchronized Matches: ${match.count}\r\n`;
+        if (match.pearsonR !== null) csv += `# Pearson Correlation (r): ${match.pearsonR.toFixed(4)} | R-Squared: ${match.rSquared.toFixed(4)}\r\n`;
+        if (match.slope !== null) csv += `# OLS Linear Regression: Y = ${match.slope.toFixed(4)} * X + ${match.intercept.toFixed(4)}\r\n`;
         csv += `timestamp_iso,formatted_time,epoch_millis,vehicle_velocity_kmh,heart_rate_bpm,sensor_used\r\n`;
         match.points.forEach(pt => {
             csv += [
@@ -2541,7 +2805,7 @@ function generateMatchedCsv(relationType) {
                 escapeCsvField(hrName)
             ].join(',') + '\r\n';
         });
-        return { filename: `matched_${isSw ? 'smartwatch' : 'chest'}_hr_vs_velocity.csv`, csv };
+        return { filename: `matched_${isSw ? 'smartwatch' : 'chest'}_hr_vs_velocity.csv`, csv, match };
     }
 
     if (relationType === 'hr_acc') {
@@ -2555,6 +2819,8 @@ function generateMatchedCsv(relationType) {
 
         let csv = `\uFEFF# CS5013 Matched Relationship: ${hrName} vs Vehicle Acceleration\r\n`;
         csv += `# Total Synchronized Matches: ${match.count}\r\n`;
+        if (match.pearsonR !== null) csv += `# Pearson Correlation (r): ${match.pearsonR.toFixed(4)} | R-Squared: ${match.rSquared.toFixed(4)}\r\n`;
+        if (match.slope !== null) csv += `# OLS Linear Regression: Y = ${match.slope.toFixed(4)} * X + ${match.intercept.toFixed(4)}\r\n`;
         csv += `timestamp_iso,formatted_time,epoch_millis,vehicle_acceleration_ms2,heart_rate_bpm,sensor_used\r\n`;
         match.points.forEach(pt => {
             csv += [
@@ -2566,7 +2832,7 @@ function generateMatchedCsv(relationType) {
                 escapeCsvField(hrName)
             ].join(',') + '\r\n';
         });
-        return { filename: `matched_${isSw ? 'smartwatch' : 'chest'}_hr_vs_acceleration.csv`, csv };
+        return { filename: `matched_${isSw ? 'smartwatch' : 'chest'}_hr_vs_acceleration.csv`, csv, match };
     }
 
     if (relationType === 'vel_acc') {
@@ -2576,6 +2842,8 @@ function generateMatchedCsv(relationType) {
 
         let csv = `\uFEFF# CS5013 Matched Relationship: Vehicle Velocity vs Vehicle Acceleration\r\n`;
         csv += `# Total Synchronized Matches: ${match.count}\r\n`;
+        if (match.pearsonR !== null) csv += `# Pearson Correlation (r): ${match.pearsonR.toFixed(4)} | R-Squared: ${match.rSquared.toFixed(4)}\r\n`;
+        if (match.slope !== null) csv += `# OLS Linear Regression: Y = ${match.slope.toFixed(4)} * X + ${match.intercept.toFixed(4)}\r\n`;
         csv += `timestamp_iso,formatted_time,epoch_millis,vehicle_velocity_kmh,vehicle_acceleration_ms2\r\n`;
         match.points.forEach(pt => {
             csv += [
@@ -2586,7 +2854,7 @@ function generateMatchedCsv(relationType) {
                 pt.y.toFixed(3)
             ].join(',') + '\r\n';
         });
-        return { filename: 'matched_velocity_vs_acceleration.csv', csv };
+        return { filename: 'matched_velocity_vs_acceleration.csv', csv, match };
     }
 
     if (relationType === 'hr_agreement') {
@@ -2596,6 +2864,8 @@ function generateMatchedCsv(relationType) {
 
         let csv = `\uFEFF# CS5013 Sensor Agreement Analysis: Smartwatch HR vs Chest ECG Monitor\r\n`;
         csv += `# Total Synchronized Seconds: ${match.count}\r\n`;
+        if (match.pearsonR !== null) csv += `# Pearson Correlation (r): ${match.pearsonR.toFixed(4)}\r\n`;
+        csv += `# Mean Bias (Watch - Chest): ${match.meanDiff.toFixed(4)} BPM | SD: ${match.stdDiff.toFixed(4)} BPM | MAE: ${match.mae.toFixed(4)} BPM | RMSE: ${match.rmse.toFixed(4)} BPM\r\n`;
         csv += `timestamp_iso,formatted_time,epoch_millis,chest_ecg_hr_bpm,smartwatch_hr_bpm,diff_smartwatch_minus_chest_bpm\r\n`;
         match.points.forEach(pt => {
             const diff = pt.y - pt.x;
@@ -2608,7 +2878,7 @@ function generateMatchedCsv(relationType) {
                 diff.toFixed(2)
             ].join(',') + '\r\n';
         });
-        return { filename: 'matched_sensor_agreement_watch_vs_chest.csv', csv };
+        return { filename: 'matched_sensor_agreement_watch_vs_chest.csv', csv, match };
     }
 
     if (relationType === 'gsr_rel') {
@@ -2630,6 +2900,8 @@ function generateMatchedCsv(relationType) {
 
         let csv = `\uFEFF# CS5013 Matched Relationship: GSR vs ${targetLabel}\r\n`;
         csv += `# Total Synchronized Matches: ${match.count}\r\n`;
+        if (match.pearsonR !== null) csv += `# Pearson Correlation (r): ${match.pearsonR.toFixed(4)} | R-Squared: ${match.rSquared.toFixed(4)}\r\n`;
+        if (match.slope !== null) csv += `# OLS Linear Regression: Y = ${match.slope.toFixed(4)} * X + ${match.intercept.toFixed(4)}\r\n`;
         csv += `timestamp_iso,formatted_time,epoch_millis,${targetLabel},detrended_gsr_adc\r\n`;
         match.points.forEach(pt => {
             csv += [
@@ -2640,7 +2912,7 @@ function generateMatchedCsv(relationType) {
                 pt.y.toFixed(2)
             ].join(',') + '\r\n';
         });
-        return { filename: `matched_gsr_vs_${targetType}.csv`, csv };
+        return { filename: `matched_gsr_vs_${targetType}.csv`, csv, match };
     }
 
     return null;
@@ -2671,7 +2943,7 @@ function exportAllMatchedCsvs() {
 function exportJsonBundle() {
     const bundle = {
         application: 'Multi-Modal Transportation Data Fusion Platform',
-        version: '1.0.0',
+        version: '1.1.0',
         exportedAt: new Date().toISOString(),
         summary: {
             activeStreamCount: Object.values(appState.datasets).filter(d => d && d.success).length,
@@ -2688,24 +2960,37 @@ function exportJsonBundle() {
                 filename: data.filename,
                 unit: data.unit,
                 validDataPointsCount: data.validDataPointsCount,
-                corruptedDataPointsCount: data.corruptedDataPointsCount,
+                skippedRowsCount: data.skippedRowsCount ?? 0,
+                warnings: data.warnings || [],
                 minValue: data.minValue,
                 maxValue: data.maxValue,
                 meanValue: data.meanValue,
-                timeSpanStartIso: data.timeSpanStartIso,
-                timeSpanEndIso: data.timeSpanEndIso,
+                stdDevValue: data.stdDevValue,
+                minEpochMillis: data.minEpochMillis,
+                maxEpochMillis: data.maxEpochMillis,
+                minFormattedTime: data.minFormattedTime,
+                maxFormattedTime: data.maxFormattedTime,
                 dataPoints: data.dataPoints
             };
         }
     });
 
-    // Add active relationship pairs
+    // Add active relationship pairs with full statistical metrics
     ['hr_vel', 'hr_acc', 'vel_acc', 'hr_agreement', 'gsr_rel'].forEach(rel => {
         const matched = generateMatchedCsv(rel);
-        if (matched) {
+        if (matched && matched.match) {
             bundle.crossSensorMatches[rel] = {
                 filename: matched.filename,
-                status: 'matched'
+                status: 'matched',
+                matchedCount: matched.match.count,
+                pearsonR: matched.match.pearsonR,
+                rSquared: matched.match.rSquared,
+                regressionSlope: matched.match.slope,
+                regressionIntercept: matched.match.intercept,
+                meanDiff: matched.match.meanDiff,
+                stdDiff: matched.match.stdDiff,
+                mae: matched.match.mae,
+                rmse: matched.match.rmse
             };
         }
     });

@@ -929,6 +929,57 @@ body {
     color: #991b1b;
 }
 
+.btn-trendline-toggle {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-trendline-toggle:hover {
+    border-color: #94a3b8;
+    background: #f8fafc;
+}
+
+.btn-trendline-toggle.active {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1d4ed8;
+}
+
+.stats-summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding: 10px 14px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: var(--radius-md);
+}
+
+.stat-metric-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    padding: 4px 10px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    color: var(--text-primary);
+}
+
+.stat-metric-label {
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
 /* Section 4: Combined Timeline */
 .timeline-container {
     display: flex;

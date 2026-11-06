@@ -24,6 +24,11 @@ const appState = {
         velAcc: true,
         hrAgree: true,
         gsrRel: true
+    },
+    timelineWindow: {
+        startPct: 0,
+        endPct: 100,
+        hoveredEpoch: null
     }
 };
 
@@ -75,6 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initGlobalButtons();
     initEmptyCharts();
     initChartPngExportButtons();
+    initTimelineControls();
     initExportSystem();
 });
 
@@ -2167,7 +2173,28 @@ function updateChartGsrRel() {
 // -------------------------------------------------------------
 // Section 4: Combined Motion, Heart Rate & GSR Timeline
 // -------------------------------------------------------------
-function updateCombinedTimeline() {
+const timelineCrosshairPlugin = {
+    id: 'timelineCrosshair',
+    afterDraw(chart) {
+        const epoch = appState.timelineWindow.hoveredEpoch;
+        if (epoch === null || epoch === undefined) return;
+        const xScale = chart.scales.x;
+        if (!xScale || epoch < xScale.min || epoch > xScale.max) return;
+        const xPos = xScale.getPixelForValue(epoch);
+        const ctx = chart.ctx;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(xPos, chart.chartArea.top);
+        ctx.lineTo(xPos, chart.chartArea.bottom);
+        ctx.lineWidth = 1.3;
+        ctx.strokeStyle = '#334155';
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.restore();
+    }
+};
+
+function getGlobalTripBounds() {
     const sw = appState.datasets.smartwatch_heart_rate;
     const chest = appState.datasets.chest_ecg_heart_rate;
     const gsr = appState.datasets.healthypi_gsr;
@@ -2176,16 +2203,168 @@ function updateCombinedTimeline() {
 
     let minEpoch = Infinity;
     let maxEpoch = -Infinity;
-
     [sw, chest, gsr, vel, acc].forEach(ds => {
-        if (ds && ds.minEpochMillis !== null) {
+        if (ds && ds.minEpochMillis !== null && ds.minEpochMillis !== undefined) {
             if (ds.minEpochMillis < minEpoch) minEpoch = ds.minEpochMillis;
             if (ds.maxEpochMillis > maxEpoch) maxEpoch = ds.maxEpochMillis;
         }
     });
+    return (minEpoch < maxEpoch) ? { minEpoch, maxEpoch } : null;
+}
 
-    const hasAnyTime = minEpoch !== Infinity && maxEpoch !== -Infinity;
-    const commonXScale = hasAnyTime ? { min: minEpoch, max: maxEpoch } : {};
+function findValueNearEpoch(dataset, targetEpoch) {
+    if (!dataset || !dataset.dataPoints || dataset.dataPoints.length === 0) return null;
+    const pts = dataset.dataPoints;
+    let lo = 0, hi = pts.length - 1;
+    while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        const ep = pts[mid].epochMillis;
+        if (ep === targetEpoch) return pts[mid].value;
+        if (ep < targetEpoch) lo = mid + 1;
+        else hi = mid - 1;
+    }
+    return null;
+}
+
+function handleTimelineHover(event, chart) {
+    const xScale = chart.scales.x;
+    if (!xScale) return;
+    const canvasPosition = Chart.helpers.getRelativePosition(event, chart);
+    if (canvasPosition.x < chart.chartArea.left || canvasPosition.x > chart.chartArea.right) {
+        return;
+    }
+    const rawEpoch = xScale.getValueForPixel(canvasPosition.x);
+    if (!rawEpoch || isNaN(rawEpoch)) return;
+    const snappedEpoch = Math.round(rawEpoch / 1000) * 1000;
+    if (appState.timelineWindow.hoveredEpoch === snappedEpoch) return;
+    appState.timelineWindow.hoveredEpoch = snappedEpoch;
+
+    updateTimelineLiveReadout(snappedEpoch);
+    ['timelineHr', 'timelineGsr', 'timelineVel', 'timelineAcc'].forEach(k => {
+        const c = appState.charts[k];
+        if (c) c.draw();
+    });
+}
+
+function updateTimelineLiveReadout(epochMillis) {
+    const timeEl = document.getElementById('roTime');
+    const swEl = document.getElementById('roSw');
+    const chestEl = document.getElementById('roChest');
+    const gsrEl = document.getElementById('roGsr');
+    const velEl = document.getElementById('roVel');
+    const accEl = document.getElementById('roAcc');
+    if (!timeEl) return;
+
+    if (!epochMillis) {
+        timeEl.textContent = 'Hover over any timeline panel';
+        if (swEl) swEl.textContent = '-';
+        if (chestEl) chestEl.textContent = '-';
+        if (gsrEl) gsrEl.textContent = '-';
+        if (velEl) velEl.textContent = '-';
+        if (accEl) accEl.textContent = '-';
+        return;
+    }
+
+    timeEl.textContent = `${formatEpochTicks(epochMillis)} UTC`;
+    const swVal = findValueNearEpoch(appState.datasets.smartwatch_heart_rate, epochMillis);
+    const chestVal = findValueNearEpoch(appState.datasets.chest_ecg_heart_rate, epochMillis);
+    const gsrVal = findValueNearEpoch(appState.datasets.healthypi_gsr, epochMillis);
+    const velVal = findValueNearEpoch(appState.datasets.vehicle_velocity, epochMillis);
+    const accVal = findValueNearEpoch(appState.datasets.vehicle_acceleration, epochMillis);
+
+    if (swEl) swEl.textContent = swVal !== null ? `${swVal.toFixed(1)} BPM` : 'No exact sample';
+    if (chestEl) chestEl.textContent = chestVal !== null ? `${chestVal.toFixed(1)} BPM` : 'No exact sample';
+    if (gsrEl) gsrEl.textContent = gsrVal !== null ? `${gsrVal.toFixed(1)} ADC` : 'No exact sample';
+    if (velEl) velEl.textContent = velVal !== null ? `${velVal.toFixed(1)} km/h` : 'No exact sample';
+    if (accEl) accEl.textContent = accVal !== null ? `${accVal >= 0 ? '+' : ''}${accVal.toFixed(2)} m/s²` : 'No exact sample';
+}
+
+function initTimelineControls() {
+    const startSlider = document.getElementById('timelineStartPct');
+    const endSlider = document.getElementById('timelineEndPct');
+    const startLabel = document.getElementById('timelineStartLabel');
+    const endLabel = document.getElementById('timelineEndLabel');
+    const presetBtns = document.querySelectorAll('.btn-timeline-preset');
+
+    function applyWindowPct(startPct, endPct) {
+        const s = Math.max(0, Math.min(95, startPct));
+        const e = Math.max(s + 2, Math.min(100, endPct));
+        appState.timelineWindow.startPct = s;
+        appState.timelineWindow.endPct = e;
+        if (startSlider) startSlider.value = s;
+        if (endSlider) endSlider.value = e;
+        if (startLabel) startLabel.textContent = `${Math.round(s)}%`;
+        if (endLabel) endLabel.textContent = `${Math.round(e)}%`;
+        updateCombinedTimeline();
+    }
+
+    if (startSlider && endSlider) {
+        startSlider.addEventListener('input', () => {
+            presetBtns.forEach(b => b.classList.remove('active'));
+            applyWindowPct(Number(startSlider.value), Number(endSlider.value));
+        });
+        endSlider.addEventListener('input', () => {
+            presetBtns.forEach(b => b.classList.remove('active'));
+            applyWindowPct(Number(startSlider.value), Number(endSlider.value));
+        });
+    }
+
+    presetBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            presetBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const preset = btn.getAttribute('data-preset');
+            const bounds = getGlobalTripBounds();
+            if (!bounds || preset === 'full') {
+                applyWindowPct(0, 100);
+                return;
+            }
+            const span = bounds.maxEpoch - bounds.minEpoch;
+            if (preset === 'first15m') {
+                const endEpoch = Math.min(bounds.maxEpoch, bounds.minEpoch + 15 * 60 * 1000);
+                applyWindowPct(0, ((endEpoch - bounds.minEpoch) / span) * 100);
+            } else if (preset === 'peakSpeed') {
+                const vel = appState.datasets.vehicle_velocity;
+                if (!vel || !vel.dataPoints.length) {
+                    applyWindowPct(0, 100);
+                    return;
+                }
+                const peakPt = vel.dataPoints.reduce((best, p) => p.value > best.value ? p : best, vel.dataPoints[0]);
+                const halfWin = 5 * 60 * 1000;
+                const sPct = ((Math.max(bounds.minEpoch, peakPt.epochMillis - halfWin) - bounds.minEpoch) / span) * 100;
+                const ePct = ((Math.min(bounds.maxEpoch, peakPt.epochMillis + halfWin) - bounds.minEpoch) / span) * 100;
+                applyWindowPct(sPct, ePct);
+            } else if (preset === 'maxBraking') {
+                const acc = appState.datasets.vehicle_acceleration;
+                if (!acc || !acc.dataPoints.length) {
+                    applyWindowPct(0, 100);
+                    return;
+                }
+                const brakePt = acc.dataPoints.reduce((worst, p) => p.value < worst.value ? p : worst, acc.dataPoints[0]);
+                const halfWin = 5 * 60 * 1000;
+                const sPct = ((Math.max(bounds.minEpoch, brakePt.epochMillis - halfWin) - bounds.minEpoch) / span) * 100;
+                const ePct = ((Math.min(bounds.maxEpoch, brakePt.epochMillis + halfWin) - bounds.minEpoch) / span) * 100;
+                applyWindowPct(sPct, ePct);
+            }
+        });
+    });
+}
+
+function updateCombinedTimeline() {
+    const sw = appState.datasets.smartwatch_heart_rate;
+    const chest = appState.datasets.chest_ecg_heart_rate;
+    const gsr = appState.datasets.healthypi_gsr;
+    const vel = appState.datasets.vehicle_velocity;
+    const acc = appState.datasets.vehicle_acceleration;
+
+    const bounds = getGlobalTripBounds();
+    let commonXScale = {};
+    if (bounds) {
+        const span = bounds.maxEpoch - bounds.minEpoch;
+        const min = bounds.minEpoch + (appState.timelineWindow.startPct / 100) * span;
+        const max = bounds.minEpoch + (appState.timelineWindow.endPct / 100) * span;
+        commonXScale = { min, max };
+    }
 
     updateTimelinePanelHr(sw, chest, commonXScale);
     updateTimelinePanelGsr(gsr, commonXScale);
@@ -2244,10 +2423,12 @@ function updateTimelinePanelHr(sw, chest, commonXScale) {
         appState.charts.timelineHr = new Chart(canvas, {
             type: 'line',
             data: { datasets },
+            plugins: [timelineCrosshairPlugin],
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: { duration: 200 },
+                onHover: (event, _els, chart) => handleTimelineHover(event, chart),
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: { display: true, position: 'right' },
@@ -2313,10 +2494,12 @@ function updateTimelinePanelGsr(gsr, commonXScale) {
         appState.charts.timelineGsr = new Chart(canvas, {
             type: 'line',
             data: { datasets: [dataset] },
+            plugins: [timelineCrosshairPlugin],
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: { duration: 200 },
+                onHover: (event, _els, chart) => handleTimelineHover(event, chart),
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: { display: false },
@@ -2381,10 +2564,12 @@ function updateTimelinePanelVel(vel, commonXScale) {
         appState.charts.timelineVel = new Chart(canvas, {
             type: 'line',
             data: { datasets: [dataset] },
+            plugins: [timelineCrosshairPlugin],
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: { duration: 200 },
+                onHover: (event, _els, chart) => handleTimelineHover(event, chart),
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: { display: false },
@@ -2448,10 +2633,12 @@ function updateTimelinePanelAcc(acc, commonXScale) {
         appState.charts.timelineAcc = new Chart(canvas, {
             type: 'line',
             data: { datasets: [dataset] },
+            plugins: [timelineCrosshairPlugin],
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: { duration: 200 },
+                onHover: (event, _els, chart) => handleTimelineHover(event, chart),
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: { display: false },

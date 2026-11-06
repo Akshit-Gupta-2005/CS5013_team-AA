@@ -660,7 +660,34 @@
             <div class="section-header">
                 <div>
                     <h2>4. Synchronized Multi-Modal Timeline</h2>
-                    <p class="section-desc">Temporal alignment of physiological signals and vehicle dynamics across trip duration.</p>
+                    <p class="section-desc">Temporal alignment of physiological signals and vehicle dynamics across trip duration with synchronized crosshair inspection.</p>
+                </div>
+            </div>
+
+            <!-- Timeline Zoom & Synchronized Live Readout Controls -->
+            <div class="timeline-controls-bar" id="timelineControlsBar">
+                <div class="timeline-zoom-row">
+                    <div class="timeline-presets">
+                        <span class="toggle-label">Time Window Presets:</span>
+                        <button type="button" class="btn-timeline-preset active" data-preset="full">Full Trip</button>
+                        <button type="button" class="btn-timeline-preset" data-preset="first15m">First 15m</button>
+                        <button type="button" class="btn-timeline-preset" data-preset="peakSpeed">Peak Speed Window</button>
+                        <button type="button" class="btn-timeline-preset" data-preset="maxBraking">Max Braking Window</button>
+                    </div>
+                    <div class="timeline-sliders">
+                        <label for="timelineStartPct">Start: <strong id="timelineStartLabel">0%</strong></label>
+                        <input type="range" id="timelineStartPct" min="0" max="95" value="0" step="1">
+                        <label for="timelineEndPct">End: <strong id="timelineEndLabel">100%</strong></label>
+                        <input type="range" id="timelineEndPct" min="5" max="100" value="100" step="1">
+                    </div>
+                </div>
+                <div class="timeline-live-readout" id="timelineLiveReadout">
+                    <span class="readout-badge readout-time">UTC Time: <strong id="roTime">Hover over any timeline panel</strong></span>
+                    <span class="readout-badge readout-sw">Watch HR: <strong id="roSw">-</strong></span>
+                    <span class="readout-badge readout-chest">Chest ECG: <strong id="roChest">-</strong></span>
+                    <span class="readout-badge readout-gsr">GSR: <strong id="roGsr">-</strong></span>
+                    <span class="readout-badge readout-vel">Velocity: <strong id="roVel">-</strong></span>
+                    <span class="readout-badge readout-acc">Acceleration: <strong id="roAcc">-</strong></span>
                 </div>
             </div>
 

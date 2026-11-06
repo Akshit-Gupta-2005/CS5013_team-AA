@@ -167,28 +167,7 @@ public class CsvSensorParser {
             }
 
             points.sort(Comparator.comparingLong(SensorDataPoint::getEpochMillis));
-
-            String minFormatted = DISPLAY_FORMATTER.format(Instant.ofEpochMilli(minEpoch));
-            String maxFormatted = DISPLAY_FORMATTER.format(Instant.ofEpochMilli(maxEpoch));
-
-            return new SensorParseResult(
-                    true,
-                    sensorType.getId(),
-                    sensorType.getDisplayName(),
-                    sensorType.getUnit(),
-                    filename,
-                    totalRows,
-                    points.size(),
-                    minValue,
-                    maxValue,
-                    minEpoch,
-                    maxEpoch,
-                    minFormatted,
-                    maxFormatted,
-                    points,
-                    List.of(),
-                    warnings
-            );
+            return buildSuccessResult(sensorType, filename, totalRows, points, warnings);
 
         } catch (Exception e) {
             return SensorParseResult.failure(
@@ -380,28 +359,7 @@ public class CsvSensorParser {
         }
 
         points.sort(Comparator.comparingLong(SensorDataPoint::getEpochMillis));
-
-        String minFormatted = DISPLAY_FORMATTER.format(Instant.ofEpochMilli(minEpoch));
-        String maxFormatted = DISPLAY_FORMATTER.format(Instant.ofEpochMilli(maxEpoch));
-
-        return new SensorParseResult(
-                true,
-                sensorType.getId(),
-                sensorType.getDisplayName(),
-                sensorType.getUnit(),
-                filename,
-                totalRows,
-                points.size(),
-                minValue,
-                maxValue,
-                minEpoch,
-                maxEpoch,
-                minFormatted,
-                maxFormatted,
-                points,
-                List.of(),
-                warnings
-        );
+        return buildSuccessResult(sensorType, filename, totalRows, points, warnings);
     }
 
     // -------------------------------------------------------------------------
@@ -513,36 +471,7 @@ public class CsvSensorParser {
         List<SensorDataPoint> points = new ArrayList<>(uniqueBySecond.values());
         points.sort(Comparator.comparingLong(SensorDataPoint::getEpochMillis));
 
-        double minValue = Double.MAX_VALUE;
-        double maxValue = -Double.MAX_VALUE;
-        for (SensorDataPoint pt : points) {
-            if (pt.getValue() < minValue) minValue = pt.getValue();
-            if (pt.getValue() > maxValue) maxValue = pt.getValue();
-        }
-
-        long minEpoch = points.get(0).getEpochMillis();
-        long maxEpoch = points.get(points.size() - 1).getEpochMillis();
-        String minFormatted = DISPLAY_FORMATTER.format(Instant.ofEpochMilli(minEpoch));
-        String maxFormatted = DISPLAY_FORMATTER.format(Instant.ofEpochMilli(maxEpoch));
-
-        return new SensorParseResult(
-                true,
-                sensorType.getId(),
-                sensorType.getDisplayName(),
-                sensorType.getUnit(),
-                filename,
-                totalRows,
-                points.size(),
-                minValue,
-                maxValue,
-                minEpoch,
-                maxEpoch,
-                minFormatted,
-                maxFormatted,
-                points,
-                List.of(),
-                warnings
-        );
+        return buildSuccessResult(sensorType, filename, totalRows, points, warnings);
     }
 
     // -------------------------------------------------------------------------
@@ -631,17 +560,41 @@ public class CsvSensorParser {
 
         points.sort(Comparator.comparingLong(SensorDataPoint::getEpochMillis));
 
+        return buildSuccessResult(sensorType, filename, totalRows, points, warnings);
+    }
+
+    private static SensorParseResult buildSuccessResult(
+            SensorType sensorType,
+            String filename,
+            int totalRows,
+            List<SensorDataPoint> points,
+            List<String> warnings) {
+
         double minValue = Double.MAX_VALUE;
         double maxValue = -Double.MAX_VALUE;
+        double sum = 0.0;
+
         for (SensorDataPoint pt : points) {
-            if (pt.getValue() < minValue) minValue = pt.getValue();
-            if (pt.getValue() > maxValue) maxValue = pt.getValue();
+            double v = pt.getValue();
+            if (v < minValue) minValue = v;
+            if (v > maxValue) maxValue = v;
+            sum += v;
         }
 
+        int n = points.size();
+        double meanValue = n > 0 ? sum / n : 0.0;
+        double sumSqDiff = 0.0;
+        for (SensorDataPoint pt : points) {
+            double diff = pt.getValue() - meanValue;
+            sumSqDiff += diff * diff;
+        }
+        double stdDevValue = n > 1 ? Math.sqrt(sumSqDiff / n) : 0.0;
+
         long minEpoch = points.get(0).getEpochMillis();
-        long maxEpoch = points.get(points.size() - 1).getEpochMillis();
+        long maxEpoch = points.get(n - 1).getEpochMillis();
         String minFormatted = DISPLAY_FORMATTER.format(Instant.ofEpochMilli(minEpoch));
         String maxFormatted = DISPLAY_FORMATTER.format(Instant.ofEpochMilli(maxEpoch));
+        int skippedRows = Math.max(0, totalRows - n);
 
         return new SensorParseResult(
                 true,
@@ -650,9 +603,12 @@ public class CsvSensorParser {
                 sensorType.getUnit(),
                 filename,
                 totalRows,
-                points.size(),
+                n,
+                skippedRows,
                 minValue,
                 maxValue,
+                meanValue,
+                stdDevValue,
                 minEpoch,
                 maxEpoch,
                 minFormatted,

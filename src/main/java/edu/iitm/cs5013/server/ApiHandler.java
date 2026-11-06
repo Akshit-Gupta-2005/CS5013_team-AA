@@ -27,6 +27,7 @@ public class ApiHandler implements HttpHandler {
     private final ObjectMapper mapper = new ObjectMapper();
     private final Path sampleDataDir;
     private Path oct22DataDir;
+    private volatile Map<String, SensorParseResult> cachedOct22Datasets;
 
     public ApiHandler(String sampleDataDirPath) {
         this.sampleDataDir = Paths.get(sampleDataDirPath);
@@ -75,6 +76,10 @@ public class ApiHandler implements HttpHandler {
                 handleExportMaster(exchange);
             } else if ("/api/export/sensor".equals(path) && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
                 handleExportSensor(exchange);
+            } else if ("/api/export/matched".equals(path) && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                handleExportMatched(exchange);
+            } else if ("/api/export/agreement".equals(path) && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                handleExportAgreement(exchange);
             } else if (path.startsWith("/api/sample-data/") && "GET".equalsIgnoreCase(exchange.getRequestMethod())) {
                 handleGetSampleData(exchange, path.substring("/api/sample-data/".length()));
             } else {
@@ -210,7 +215,40 @@ public class ApiHandler implements HttpHandler {
         sendCsv(exchange, 200, "processed_" + sensorId + ".csv", csv);
     }
 
+    private void handleExportMatched(HttpExchange exchange) throws IOException {
+        String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        JsonNode root = mapper.readTree(body);
+        if (root == null || !root.has("seriesX") || !root.has("seriesY")) {
+            sendJson(exchange, 400, Map.of("error", "Missing required seriesX or seriesY objects."));
+            return;
+        }
+        SensorParseResult seriesX = mapper.treeToValue(root.get("seriesX"), SensorParseResult.class);
+        SensorParseResult seriesY = mapper.treeToValue(root.get("seriesY"), SensorParseResult.class);
+        String labelX = root.has("labelX") ? root.get("labelX").asText() : "Series X";
+        String labelY = root.has("labelY") ? root.get("labelY").asText() : "Series Y";
+        MatchResult matchResult = ExactTimestampMatcher.match(seriesX, seriesY, labelX, labelY);
+        String csv = DataExporter.toMatchedCsv(matchResult);
+        sendCsv(exchange, 200, "matched_relationship.csv", csv);
+    }
+
+    private void handleExportAgreement(HttpExchange exchange) throws IOException {
+        String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        JsonNode root = mapper.readTree(body);
+        if (root == null || !root.has("seriesX") || !root.has("seriesY")) {
+            sendJson(exchange, 400, Map.of("error", "Missing required seriesX or seriesY objects."));
+            return;
+        }
+        SensorParseResult seriesX = mapper.treeToValue(root.get("seriesX"), SensorParseResult.class);
+        SensorParseResult seriesY = mapper.treeToValue(root.get("seriesY"), SensorParseResult.class);
+        MatchResult matchResult = ExactTimestampMatcher.match(seriesX, seriesY, "Chest ECG Monitor", "Smartwatch Heart Rate");
+        String csv = DataExporter.toAgreementCsv(matchResult);
+        sendCsv(exchange, 200, "matched_sensor_agreement_watch_vs_chest.csv", csv);
+    }
+
     private Map<String, SensorParseResult> loadOct22Datasets() throws IOException {
+        if (cachedOct22Datasets != null && !cachedOct22Datasets.isEmpty()) {
+            return cachedOct22Datasets;
+        }
         Path dataDir = getOct22DataDir();
         if (dataDir == null || !Files.exists(dataDir) || !Files.isDirectory(dataDir)) {
             return Collections.emptyMap();
@@ -277,7 +315,8 @@ public class ApiHandler implements HttpHandler {
             List<Path> gsrFiles;
             try (var stream = Files.list(gsrDir)) {
                 gsrFiles = stream.filter(p -> p.toString().toLowerCase().endsWith(".csv"))
-                        .sorted()
+                        .sorted(Comparator.comparingInt(ApiHandler::extractTrailingRecordNumber)
+                                .thenComparing(p -> p.getFileName().toString()))
                         .collect(Collectors.toList());
             }
             if (!gsrFiles.isEmpty()) {
@@ -295,7 +334,21 @@ public class ApiHandler implements HttpHandler {
                 );
             }
         }
+        if (!datasets.isEmpty()) {
+            cachedOct22Datasets = Collections.unmodifiableMap(datasets);
+        }
         return datasets;
+    }
+
+    private static int extractTrailingRecordNumber(Path path) {
+        String name = path.getFileName().toString();
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)").matcher(name);
+        if (m.find()) {
+            try {
+                return Integer.parseInt(m.group(1));
+            } catch (NumberFormatException ignored) {}
+        }
+        return Integer.MAX_VALUE;
     }
 
     private void handleListSamples(HttpExchange exchange) throws IOException {

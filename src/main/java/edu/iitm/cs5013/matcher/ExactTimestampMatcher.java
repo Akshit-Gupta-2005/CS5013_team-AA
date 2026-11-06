@@ -82,6 +82,14 @@ public class ExactTimestampMatcher {
         boolean sufficient = count > 0;
         String message;
 
+        Double pearsonR = null;
+        Double regressionSlope = null;
+        Double regressionIntercept = null;
+        Double meanDiff = null;
+        Double stdDiff = null;
+        Double mae = null;
+        Double rmse = null;
+
         if (!sufficient) {
             message = "Insufficient exact timestamp matches to plot this relationship (0 matches found out of "
                     + seriesX.getValidDataPointsCount() + " and " + seriesY.getValidDataPointsCount()
@@ -90,6 +98,66 @@ public class ExactTimestampMatcher {
             message = "Identified " + count + " exact timestamp matches between " + seriesXLabel + " ("
                     + seriesX.getValidDataPointsCount() + " points) and " + seriesYLabel + " ("
                     + seriesY.getValidDataPointsCount() + " points).";
+
+            double sumX = 0.0;
+            double sumY = 0.0;
+            double sumDiff = 0.0;
+            double sumAbsDiff = 0.0;
+            double sumSqDiff = 0.0;
+
+            for (PairedDataPoint pt : matched) {
+                double x = pt.getxValue();
+                double y = pt.getyValue();
+                double d = y - x;
+                sumX += x;
+                sumY += y;
+                sumDiff += d;
+                sumAbsDiff += Math.abs(d);
+                sumSqDiff += d * d;
+            }
+
+            double meanX = sumX / count;
+            double meanY = sumY / count;
+            meanDiff = sumDiff / count;
+            mae = sumAbsDiff / count;
+            rmse = Math.sqrt(sumSqDiff / count);
+
+            if (count > 1) {
+                double sxx = 0.0;
+                double syy = 0.0;
+                double sxy = 0.0;
+                double varDiff = 0.0;
+
+                for (PairedDataPoint pt : matched) {
+                    double dx = pt.getxValue() - meanX;
+                    double dy = pt.getyValue() - meanY;
+                    double dd = (pt.getyValue() - pt.getxValue()) - meanDiff;
+                    sxx += dx * dx;
+                    syy += dy * dy;
+                    sxy += dx * dy;
+                    varDiff += dd * dd;
+                }
+
+                stdDiff = Math.sqrt(varDiff / count);
+                if (sxx > 1e-12) {
+                    regressionSlope = sxy / sxx;
+                    regressionIntercept = meanY - regressionSlope * meanX;
+                    if (syy > 1e-12) {
+                        pearsonR = Math.max(-1.0, Math.min(1.0, sxy / Math.sqrt(sxx * syy)));
+                    } else {
+                        pearsonR = 0.0;
+                    }
+                } else {
+                    regressionSlope = 0.0;
+                    regressionIntercept = meanY;
+                    pearsonR = 0.0;
+                }
+            } else {
+                stdDiff = 0.0;
+                pearsonR = 0.0;
+                regressionSlope = 0.0;
+                regressionIntercept = meanY;
+            }
         }
 
         return new MatchResult(
@@ -102,6 +170,13 @@ public class ExactTimestampMatcher {
                 seriesX.getUnit(),
                 seriesY.getUnit(),
                 message,
+                pearsonR,
+                regressionSlope,
+                regressionIntercept,
+                meanDiff,
+                stdDiff,
+                mae,
+                rmse,
                 matched
         );
     }

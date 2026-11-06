@@ -1,5 +1,6 @@
 package edu.iitm.cs5013.model;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,8 +16,11 @@ public class SensorParseResult {
     private final String filename;
     private final int totalRowsRead;
     private final int validDataPointsCount;
+    private final int skippedRowsCount;
     private final Double minValue;
     private final Double maxValue;
+    private final Double meanValue;
+    private final Double stdDevValue;
     private final Long minEpochMillis;
     private final Long maxEpochMillis;
     private final String minFormattedTime;
@@ -26,6 +30,47 @@ public class SensorParseResult {
     private final List<String> warnings;
 
     public SensorParseResult(
+            boolean success,
+            String sensorType,
+            String displayName,
+            String unit,
+            String filename,
+            int totalRowsRead,
+            int validDataPointsCount,
+            Double minValue,
+            Double maxValue,
+            Long minEpochMillis,
+            Long maxEpochMillis,
+            String minFormattedTime,
+            String maxFormattedTime,
+            List<SensorDataPoint> dataPoints,
+            List<String> errors,
+            List<String> warnings) {
+        this(
+                success,
+                sensorType,
+                displayName,
+                unit,
+                filename,
+                totalRowsRead,
+                validDataPointsCount,
+                Math.max(0, totalRowsRead - validDataPointsCount),
+                minValue,
+                maxValue,
+                null,
+                null,
+                minEpochMillis,
+                maxEpochMillis,
+                minFormattedTime,
+                maxFormattedTime,
+                dataPoints,
+                errors,
+                warnings
+        );
+    }
+
+    @JsonCreator
+    public SensorParseResult(
             @JsonProperty("success") boolean success,
             @JsonProperty("sensorType") String sensorType,
             @JsonProperty("displayName") String displayName,
@@ -33,8 +78,11 @@ public class SensorParseResult {
             @JsonProperty("filename") String filename,
             @JsonProperty("totalRowsRead") int totalRowsRead,
             @JsonProperty("validDataPointsCount") int validDataPointsCount,
+            @JsonProperty("skippedRowsCount") Integer skippedRowsCount,
             @JsonProperty("minValue") Double minValue,
             @JsonProperty("maxValue") Double maxValue,
+            @JsonProperty("meanValue") Double meanValue,
+            @JsonProperty("stdDevValue") Double stdDevValue,
             @JsonProperty("minEpochMillis") Long minEpochMillis,
             @JsonProperty("maxEpochMillis") Long maxEpochMillis,
             @JsonProperty("minFormattedTime") String minFormattedTime,
@@ -49,8 +97,11 @@ public class SensorParseResult {
         this.filename = filename;
         this.totalRowsRead = totalRowsRead;
         this.validDataPointsCount = validDataPointsCount;
+        this.skippedRowsCount = skippedRowsCount != null ? skippedRowsCount : Math.max(0, totalRowsRead - validDataPointsCount);
         this.minValue = minValue;
         this.maxValue = maxValue;
+        this.meanValue = meanValue;
+        this.stdDevValue = stdDevValue;
         this.minEpochMillis = minEpochMillis;
         this.maxEpochMillis = maxEpochMillis;
         this.minFormattedTime = minFormattedTime;
@@ -69,6 +120,9 @@ public class SensorParseResult {
                 filename,
                 0,
                 0,
+                0,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -109,12 +163,24 @@ public class SensorParseResult {
         return validDataPointsCount;
     }
 
+    public int getSkippedRowsCount() {
+        return skippedRowsCount;
+    }
+
     public Double getMinValue() {
         return minValue;
     }
 
     public Double getMaxValue() {
         return maxValue;
+    }
+
+    public Double getMeanValue() {
+        return meanValue;
+    }
+
+    public Double getStdDevValue() {
+        return stdDevValue;
     }
 
     public Long getMinEpochMillis() {

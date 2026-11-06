@@ -116,6 +116,12 @@ public class DataExporter {
           .append("# Stream 1: ").append(match.getSeries1Name()).append(" (").append(match.getSeries1Unit()).append(")").append(NEWLINE)
           .append("# Stream 2: ").append(match.getSeries2Name()).append(" (").append(match.getSeries2Unit()).append(")").append(NEWLINE)
           .append("# Total Matched Synchronized Points: ").append(match.getMatchCount()).append(NEWLINE);
+        if (match.getPearsonR() != null) {
+            sb.append(String.format(Locale.US, "# Pearson Correlation (r): %.4f | Linear Fit: y = %.4fx + %.4f",
+                    match.getPearsonR(),
+                    match.getRegressionSlope() != null ? match.getRegressionSlope() : 0.0,
+                    match.getRegressionIntercept() != null ? match.getRegressionIntercept() : 0.0)).append(NEWLINE);
+        }
 
         sb.append("timestamp_iso,formatted_time,epoch_millis,")
           .append(sanitizeHeader(match.getSeries1Name())).append("_").append(sanitizeHeader(match.getSeries1Unit())).append(",")
@@ -147,6 +153,12 @@ public class DataExporter {
 
         sb.append("# CS5013 Sensor Agreement Analysis (Smartwatch HR vs Chest ECG Monitor)").append(NEWLINE)
           .append("# Total Synchronized Seconds: ").append(match.getMatchCount()).append(NEWLINE);
+        if (match.getMeanDiff() != null) {
+            sb.append(String.format(Locale.US, "# Mean Bias (Watch - Chest): %.2f BPM | MAE: %.2f BPM | RMSE: %.2f BPM",
+                    match.getMeanDiff(),
+                    match.getMae() != null ? match.getMae() : 0.0,
+                    match.getRmse() != null ? match.getRmse() : 0.0)).append(NEWLINE);
+        }
 
         sb.append("timestamp_iso,formatted_time,epoch_millis,chest_ecg_hr_bpm,smartwatch_hr_bpm,diff_smartwatch_minus_chest_bpm").append(NEWLINE);
 

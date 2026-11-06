@@ -105,10 +105,12 @@
                         <div class="file-stats-grid">
                             <div class="stat-item"><span class="stat-label">Records</span><span class="stat-val" id="count-smartwatch_heart_rate">0</span></div>
                             <div class="stat-item"><span class="stat-label">Min &bull; Max</span><span class="stat-val" id="range-smartwatch_heart_rate">-</span></div>
+                            <div class="stat-item span-2"><span class="stat-label">Mean &plusmn; SD</span><span class="stat-val text-xs" id="mean-smartwatch_heart_rate">-</span></div>
                             <div class="stat-item span-2"><span class="stat-label">Time Span (UTC)</span><span class="stat-val text-xs" id="timespan-smartwatch_heart_rate">-</span></div>
                         </div>
                     </div>
 
+                    <div class="warning-msg hidden" id="warn-smartwatch_heart_rate"></div>
                     <div class="error-msg hidden" id="error-smartwatch_heart_rate"></div>
                 </div>
 
@@ -146,10 +148,12 @@
                         <div class="file-stats-grid">
                             <div class="stat-item"><span class="stat-label">Records</span><span class="stat-val" id="count-chest_ecg_heart_rate">0</span></div>
                             <div class="stat-item"><span class="stat-label">Min &bull; Max</span><span class="stat-val" id="range-chest_ecg_heart_rate">-</span></div>
+                            <div class="stat-item span-2"><span class="stat-label">Mean &plusmn; SD</span><span class="stat-val text-xs" id="mean-chest_ecg_heart_rate">-</span></div>
                             <div class="stat-item span-2"><span class="stat-label">Time Span (UTC)</span><span class="stat-val text-xs" id="timespan-chest_ecg_heart_rate">-</span></div>
                         </div>
                     </div>
 
+                    <div class="warning-msg hidden" id="warn-chest_ecg_heart_rate"></div>
                     <div class="error-msg hidden" id="error-chest_ecg_heart_rate"></div>
                 </div>
 
@@ -188,10 +192,12 @@
                             <div class="stat-item"><span class="stat-label">Records</span><span class="stat-val" id="count-vehicle_dynamics">0</span></div>
                             <div class="stat-item"><span class="stat-label">Speed Range</span><span class="stat-val" id="range-speed-vehicle_dynamics">-</span></div>
                             <div class="stat-item"><span class="stat-label">Accel Range</span><span class="stat-val" id="range-accel-vehicle_dynamics">-</span></div>
+                            <div class="stat-item"><span class="stat-label">Mean Speed</span><span class="stat-val text-xs" id="mean-vehicle_dynamics">-</span></div>
                             <div class="stat-item span-2"><span class="stat-label">Time Span (UTC)</span><span class="stat-val text-xs" id="timespan-vehicle_dynamics">-</span></div>
                         </div>
                     </div>
 
+                    <div class="warning-msg hidden" id="warn-vehicle_dynamics"></div>
                     <div class="error-msg hidden" id="error-vehicle_dynamics"></div>
                 </div>
 
@@ -229,11 +235,48 @@
                         <div class="file-stats-grid">
                             <div class="stat-item"><span class="stat-label">1-Hz Points</span><span class="stat-val" id="count-healthypi_gsr">0</span></div>
                             <div class="stat-item"><span class="stat-label">Min &bull; Max</span><span class="stat-val" id="range-healthypi_gsr">-</span></div>
+                            <div class="stat-item span-2"><span class="stat-label">Mean &plusmn; SD</span><span class="stat-val text-xs" id="mean-healthypi_gsr">-</span></div>
                             <div class="stat-item span-2"><span class="stat-label">Time Span (UTC)</span><span class="stat-val text-xs" id="timespan-healthypi_gsr">-</span></div>
                         </div>
                     </div>
 
+                    <div class="warning-msg hidden" id="warn-healthypi_gsr"></div>
                     <div class="error-msg hidden" id="error-healthypi_gsr"></div>
+                </div>
+            </div>
+
+            <!-- Trip Executive Summary & Driving Dynamics KPI Banner -->
+            <div class="kpi-summary-container hidden" id="tripKpiBanner">
+                <div class="kpi-banner-header">
+                    <span class="kpi-banner-title">Trip Telemetry &amp; Physiological Executive Summary</span>
+                    <span class="kpi-banner-sub" id="kpiActiveStreamsLabel">Real-time multi-modal summary</span>
+                </div>
+                <div class="kpi-banner-grid">
+                    <div class="kpi-card">
+                        <span class="kpi-label">Synchronized Span</span>
+                        <span class="kpi-value" id="kpiDurationVal">-</span>
+                        <span class="kpi-sub" id="kpiSpanSub">Awaiting streams</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Cardiac Response (HR)</span>
+                        <span class="kpi-value" id="kpiHrVal">-</span>
+                        <span class="kpi-sub" id="kpiHrSub">No HR stream active</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Speed &amp; Mobility Profile</span>
+                        <span class="kpi-value" id="kpiVelVal">-</span>
+                        <span class="kpi-sub" id="kpiVelSub">No velocity stream active</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Kinematic Events (|a| &gt; 2 m/s²)</span>
+                        <span class="kpi-value" id="kpiDynVal">-</span>
+                        <span class="kpi-sub" id="kpiDynSub">No acceleration stream active</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Electrodermal Arousal (GSR)</span>
+                        <span class="kpi-value" id="kpiGsrVal">-</span>
+                        <span class="kpi-sub" id="kpiGsrSub">No GSR stream active</span>
+                    </div>
                 </div>
             </div>
         </section>
@@ -260,6 +303,7 @@
                     <div class="chart-legend-custom" id="hrLegend">
                         <span class="legend-chip chip-sw hidden" id="chipSw"><span class="chip-color color-sw"></span> Smartwatch HR</span>
                         <span class="legend-chip chip-chest hidden" id="chipChest"><span class="chip-color color-chest"></span> Chest ECG HR</span>
+                        <button type="button" class="btn-chart-export" data-export-chart="chartHeartRate" title="Save chart as high-res PNG">Save PNG</button>
                     </div>
                 </div>
 
@@ -285,8 +329,11 @@
                             </div>
                             <p class="chart-subtitle">Speed profile (km/h) across trip duration</p>
                         </div>
-                        <div class="stat-pill-inline" id="velSummaryPill" style="display:none;">
-                            Max: <strong id="velMaxVal">-</strong> km/h
+                        <div class="chart-header-actions">
+                            <div class="stat-pill-inline" id="velSummaryPill" style="display:none;">
+                                Max: <strong id="velMaxVal">-</strong> km/h
+                            </div>
+                            <button type="button" class="btn-chart-export" data-export-chart="chartVelocity" title="Save chart as high-res PNG">Save PNG</button>
                         </div>
                     </div>
                     <div class="chart-wrapper">
@@ -309,8 +356,11 @@
                             </div>
                             <p class="chart-subtitle">Acceleration (+) &amp; Deceleration/Braking (-) in m/s²</p>
                         </div>
-                        <div class="stat-pill-inline" id="accSummaryPill" style="display:none;">
-                            Zero-Line Baseline Included
+                        <div class="chart-header-actions">
+                            <div class="stat-pill-inline" id="accSummaryPill" style="display:none;">
+                                Zero-Line Baseline Included
+                            </div>
+                            <button type="button" class="btn-chart-export" data-export-chart="chartAcceleration" title="Save chart as high-res PNG">Save PNG</button>
                         </div>
                     </div>
                     <div class="chart-wrapper">
@@ -334,8 +384,11 @@
                         </div>
                         <p class="chart-subtitle">Detrended phasic electrodermal activity (sympathetic arousal variations across trip duration)</p>
                     </div>
-                    <div class="stat-pill-inline" id="gsrSummaryPill" style="display:none;">
-                        1-Hz Synchronized Stream (<strong id="gsrPtsVal">-</strong> pts)
+                    <div class="chart-header-actions">
+                        <div class="stat-pill-inline" id="gsrSummaryPill" style="display:none;">
+                            1-Hz Synchronized Stream (<strong id="gsrPtsVal">-</strong> pts)
+                        </div>
+                        <button type="button" class="btn-chart-export" data-export-chart="chartGsr" title="Save chart as high-res PNG">Save PNG</button>
                     </div>
                 </div>
                 <div class="chart-wrapper">
@@ -376,7 +429,15 @@
                             <button type="button" class="btn-toggle active" id="btnToggleHrVelSw">Smartwatch HR vs Velocity</button>
                             <button type="button" class="btn-toggle" id="btnToggleHrVelChest">Chest ECG HR vs Velocity</button>
                         </div>
+                        <button type="button" class="btn-trendline-toggle active" id="btnTrendlineHrVel" data-trendline-target="hrVel">Show OLS Trendline</button>
                         <div class="match-badge" id="matchBadgeHrVel">Checking matches...</div>
+                    </div>
+
+                    <div class="stats-summary-strip hidden" id="statsStripHrVel">
+                        <div class="stat-metric-pill"><span class="stat-metric-label">Pearson r:</span> <strong id="statHrVelR">-</strong></div>
+                        <div class="stat-metric-pill"><span class="stat-metric-label">R² Fit:</span> <strong id="statHrVelR2">-</strong></div>
+                        <div class="stat-metric-pill"><span class="stat-metric-label">OLS Regression:</span> <strong id="statHrVelEq">-</strong></div>
+                        <div class="stat-metric-pill"><span class="stat-metric-label">Correlation Strength:</span> <strong id="statHrVelStrength">-</strong></div>
                     </div>
 
                     <div class="chart-card">
@@ -384,6 +445,12 @@
                             <div>
                                 <h3 id="titleHrVel">Smartwatch Heart Rate vs Vehicle Velocity</h3>
                                 <p class="chart-subtitle">X-axis: Vehicle Velocity (km/h) &bull; Y-axis: Heart Rate (BPM)</p>
+                            </div>
+                            <div class="chart-actions-group">
+                                <button type="button" class="btn-chart-export" data-export-chart="chartHrVsVel" title="Export Scatter Chart as PNG">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    Save PNG
+                                </button>
                             </div>
                         </div>
                         <div class="chart-wrapper">
@@ -405,7 +472,15 @@
                             <button type="button" class="btn-toggle active" id="btnToggleHrAccSw">Smartwatch HR vs Acceleration</button>
                             <button type="button" class="btn-toggle" id="btnToggleHrAccChest">Chest ECG HR vs Acceleration</button>
                         </div>
+                        <button type="button" class="btn-trendline-toggle active" id="btnTrendlineHrAcc" data-trendline-target="hrAcc">Show OLS Trendline</button>
                         <div class="match-badge" id="matchBadgeHrAcc">Checking matches...</div>
+                    </div>
+
+                    <div class="stats-summary-strip hidden" id="statsStripHrAcc">
+                        <div class="stat-metric-pill"><span class="stat-metric-label">Pearson r:</span> <strong id="statHrAccR">-</strong></div>
+                        <div class="stat-metric-pill"><span class="stat-metric-label">R² Fit:</span> <strong id="statHrAccR2">-</strong></div>
+                        <div class="stat-metric-pill"><span class="stat-metric-label">OLS Regression:</span> <strong id="statHrAccEq">-</strong></div>
+                        <div class="stat-metric-pill"><span class="stat-metric-label">Correlation Strength:</span> <strong id="statHrAccStrength">-</strong></div>
                     </div>
 
                     <div class="chart-card">
@@ -413,6 +488,12 @@
                             <div>
                                 <h3 id="titleHrAcc">Smartwatch Heart Rate vs Vehicle Acceleration</h3>
                                 <p class="chart-subtitle">X-axis: Longitudinal Acceleration (m/s²) &bull; Y-axis: Heart Rate (BPM)</p>
+                            </div>
+                            <div class="chart-actions-group">
+                                <button type="button" class="btn-chart-export" data-export-chart="chartHrVsAcc" title="Export Scatter Chart as PNG">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    Save PNG
+                                </button>
                             </div>
                         </div>
                         <div class="chart-wrapper">
@@ -430,13 +511,28 @@
                 <div class="tab-pane" id="tab-vel-accel">
                     <div class="sub-toggle-bar">
                         <span class="toggle-label">Vehicle Dynamics Phase Portrait:</span>
+                        <button type="button" class="btn-trendline-toggle active" id="btnTrendlineVelAcc" data-trendline-target="velAcc">Show OLS Trendline</button>
                         <div class="match-badge" id="matchBadgeVelAcc">Checking matches...</div>
                     </div>
+
+                    <div class="stats-summary-strip hidden" id="statsStripVelAcc">
+                        <div class="stat-metric-pill"><span class="stat-metric-label">Pearson r:</span> <strong id="statVelAccR">-</strong></div>
+                        <div class="stat-metric-pill"><span class="stat-metric-label">R² Fit:</span> <strong id="statVelAccR2">-</strong></div>
+                        <div class="stat-metric-pill"><span class="stat-metric-label">OLS Regression:</span> <strong id="statVelAccEq">-</strong></div>
+                        <div class="stat-metric-pill"><span class="stat-metric-label">Kinematic Regime:</span> <strong id="statVelAccStrength">-</strong></div>
+                    </div>
+
                     <div class="chart-card">
                         <div class="chart-card-header">
                             <div>
                                 <h3>Vehicle Velocity vs Longitudinal Acceleration</h3>
                                 <p class="chart-subtitle">X-axis: Velocity (km/h) &bull; Y-axis: Acceleration (m/s²)</p>
+                            </div>
+                            <div class="chart-actions-group">
+                                <button type="button" class="btn-chart-export" data-export-chart="chartVelVsAcc" title="Export Phase Portrait as PNG">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    Save PNG
+                                </button>
                             </div>
                         </div>
                         <div class="chart-wrapper">
@@ -454,7 +550,15 @@
                 <div class="tab-pane" id="tab-hr-agreement">
                     <div class="sub-toggle-bar">
                         <span class="toggle-label">Dual Heart Rate Sensor Concordance (Samsung Watch vs Polar Chest ECG):</span>
+                        <button type="button" class="btn-trendline-toggle active" id="btnTrendlineHrAgree" data-trendline-target="hrAgree">Show OLS &amp; Identity Line (y=x)</button>
                         <div class="match-badge" id="matchBadgeHrAgreement">Checking matches...</div>
+                    </div>
+
+                    <div class="stats-summary-strip hidden" id="statsStripHrAgree">
+                        <div class="stat-metric-pill"><span class="stat-metric-label">Pearson r:</span> <strong id="statHrAgreeR">-</strong></div>
+                        <div class="stat-metric-pill"><span class="stat-metric-label">Mean Bias (Watch&minus;Chest):</span> <strong id="statHrAgreeBias">-</strong></div>
+                        <div class="stat-metric-pill"><span class="stat-metric-label">95% LoA (&plusmn;1.96 SD):</span> <strong id="statHrAgreeLoa">-</strong></div>
+                        <div class="stat-metric-pill"><span class="stat-metric-label">MAE / RMSE:</span> <strong id="statHrAgreeErr">-</strong></div>
                     </div>
                     
                     <div class="charts-row">
@@ -463,6 +567,12 @@
                                 <div>
                                     <h3>Watch HR vs Chest ECG HR Scatter</h3>
                                     <p class="chart-subtitle">X-axis: Chest ECG (BPM) &bull; Y-axis: Smartwatch (BPM)</p>
+                                </div>
+                                <div class="chart-actions-group">
+                                    <button type="button" class="btn-chart-export" data-export-chart="chartHrScatterAgreement" title="Export Agreement Scatter as PNG">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                        Save PNG
+                                    </button>
                                 </div>
                             </div>
                             <div class="chart-wrapper">
@@ -478,7 +588,13 @@
                             <div class="chart-card-header">
                                 <div>
                                     <h3>Heart Rate Discrepancy Timeline</h3>
-                                    <p class="chart-subtitle">Difference (Smartwatch &minus; Chest ECG) at Matching Seconds</p>
+                                    <p class="chart-subtitle">Difference (Smartwatch &minus; Chest ECG) with Mean Bias &amp; 95% LoA</p>
+                                </div>
+                                <div class="chart-actions-group">
+                                    <button type="button" class="btn-chart-export" data-export-chart="chartHrDiffTimeline" title="Export Discrepancy Timeline as PNG">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                        Save PNG
+                                    </button>
                                 </div>
                             </div>
                             <div class="chart-wrapper">
@@ -502,7 +618,15 @@
                             <button type="button" class="btn-toggle" id="btnToggleGsrSw">Smartwatch HR</button>
                             <button type="button" class="btn-toggle" id="btnToggleGsrChest">Chest ECG HR</button>
                         </div>
+                        <button type="button" class="btn-trendline-toggle active" id="btnTrendlineGsrRel" data-trendline-target="gsrRel">Show OLS Trendline</button>
                         <div class="match-badge" id="matchBadgeGsrRel">Checking matches...</div>
+                    </div>
+
+                    <div class="stats-summary-strip hidden" id="statsStripGsrRel">
+                        <div class="stat-metric-pill"><span class="stat-metric-label">Pearson r:</span> <strong id="statGsrRelR">-</strong></div>
+                        <div class="stat-metric-pill"><span class="stat-metric-label">R² Fit:</span> <strong id="statGsrRelR2">-</strong></div>
+                        <div class="stat-metric-pill"><span class="stat-metric-label">OLS Regression:</span> <strong id="statGsrRelEq">-</strong></div>
+                        <div class="stat-metric-pill"><span class="stat-metric-label">Coupling Profile:</span> <strong id="statGsrRelStrength">-</strong></div>
                     </div>
 
                     <div class="chart-card">
@@ -510,6 +634,12 @@
                             <div>
                                 <h3 id="titleGsrRel">HealthyPi GSR vs Vehicle Velocity</h3>
                                 <p class="chart-subtitle" id="subtitleGsrRel">X-axis: Vehicle Velocity (km/h) &bull; Y-axis: Detrended GSR</p>
+                            </div>
+                            <div class="chart-actions-group">
+                                <button type="button" class="btn-chart-export" data-export-chart="chartGsrRel" title="Export GSR Relationship Scatter as PNG">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    Save PNG
+                                </button>
                             </div>
                         </div>
                         <div class="chart-wrapper">
@@ -530,7 +660,34 @@
             <div class="section-header">
                 <div>
                     <h2>4. Synchronized Multi-Modal Timeline</h2>
-                    <p class="section-desc">Temporal alignment of physiological signals and vehicle dynamics across trip duration.</p>
+                    <p class="section-desc">Temporal alignment of physiological signals and vehicle dynamics across trip duration with synchronized crosshair inspection.</p>
+                </div>
+            </div>
+
+            <!-- Timeline Zoom & Synchronized Live Readout Controls -->
+            <div class="timeline-controls-bar" id="timelineControlsBar">
+                <div class="timeline-zoom-row">
+                    <div class="timeline-presets">
+                        <span class="toggle-label">Time Window Presets:</span>
+                        <button type="button" class="btn-timeline-preset active" data-preset="full">Full Trip</button>
+                        <button type="button" class="btn-timeline-preset" data-preset="first15m">First 15m</button>
+                        <button type="button" class="btn-timeline-preset" data-preset="peakSpeed">Peak Speed Window</button>
+                        <button type="button" class="btn-timeline-preset" data-preset="maxBraking">Max Braking Window</button>
+                    </div>
+                    <div class="timeline-sliders">
+                        <label for="timelineStartPct">Start: <strong id="timelineStartLabel">0%</strong></label>
+                        <input type="range" id="timelineStartPct" min="0" max="95" value="0" step="1">
+                        <label for="timelineEndPct">End: <strong id="timelineEndLabel">100%</strong></label>
+                        <input type="range" id="timelineEndPct" min="5" max="100" value="100" step="1">
+                    </div>
+                </div>
+                <div class="timeline-live-readout" id="timelineLiveReadout">
+                    <span class="readout-badge readout-time">UTC Time: <strong id="roTime">Hover over any timeline panel</strong></span>
+                    <span class="readout-badge readout-sw">Watch HR: <strong id="roSw">-</strong></span>
+                    <span class="readout-badge readout-chest">Chest ECG: <strong id="roChest">-</strong></span>
+                    <span class="readout-badge readout-gsr">GSR: <strong id="roGsr">-</strong></span>
+                    <span class="readout-badge readout-vel">Velocity: <strong id="roVel">-</strong></span>
+                    <span class="readout-badge readout-acc">Acceleration: <strong id="roAcc">-</strong></span>
                 </div>
             </div>
 

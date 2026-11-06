@@ -282,4 +282,53 @@ public class CsvSensorParserTest {
         assertTrue(match.isHasSufficientMatches());
         assertEquals(3, match.getMatchCount());
     }
+
+    @Test
+    @DisplayName("Should compute meanValue, stdDevValue, and skippedRowsCount accurately")
+    void testMeanStdDevAndSkippedRowsMetrics() {
+        String csv = "timestamp,heart_rate\n" +
+                "2026-10-11T14:30:00Z,60.0\n" +
+                "2026-10-11T14:30:01Z,bad_num\n" +
+                "2026-10-11T14:30:02Z,80.0\n" +
+                "invalid_ts,90.0\n" +
+                "2026-10-11T14:30:04Z,100.0\n";
+
+        SensorParseResult res = CsvSensorParser.parse(csv, SensorType.SMARTWATCH_HEART_RATE, "metrics.csv");
+        assertTrue(res.isSuccess());
+        assertEquals(3, res.getValidDataPointsCount());
+        assertEquals(2, res.getSkippedRowsCount());
+        assertNotNull(res.getMeanValue());
+        assertNotNull(res.getStdDevValue());
+        assertEquals(80.0, res.getMeanValue(), 1e-4);
+        // Population SD of [60, 80, 100] = sqrt(((400 + 0 + 400)/3)) = sqrt(800/3) ≈ 16.32993
+        assertEquals(Math.sqrt(800.0 / 3.0), res.getStdDevValue(), 1e-4);
+    }
+
+    @Test
+    @DisplayName("Should compute Pearson r, OLS slope/intercept, and Bland-Altman agreement statistics")
+    void testCorrelationAndBlandAltmanMetrics() {
+        String xCsv = "timestamp,ecg_hr\n" +
+                "2026-10-11T10:00:00Z,70.0\n" +
+                "2026-10-11T10:00:01Z,80.0\n" +
+                "2026-10-11T10:00:02Z,90.0\n";
+        String yCsv = "timestamp,heart_rate\n" +
+                "2026-10-11T10:00:00Z,72.0\n" +
+                "2026-10-11T10:00:01Z,82.0\n" +
+                "2026-10-11T10:00:02Z,92.0\n";
+
+        SensorParseResult chest = CsvSensorParser.parse(xCsv, SensorType.CHEST_ECG_HEART_RATE, "chest.csv");
+        SensorParseResult watch = CsvSensorParser.parse(yCsv, SensorType.SMARTWATCH_HEART_RATE, "watch.csv");
+
+        MatchResult match = ExactTimestampMatcher.match(chest, watch, "Chest ECG", "Smartwatch HR");
+        assertTrue(match.isHasSufficientMatches());
+        assertEquals(3, match.getMatchCount());
+        assertNotNull(match.getPearsonR());
+        assertEquals(1.0, match.getPearsonR(), 1e-6);
+        assertEquals(1.0, match.getRegressionSlope(), 1e-6);
+        assertEquals(2.0, match.getRegressionIntercept(), 1e-6);
+        assertEquals(2.0, match.getMeanDiff(), 1e-6);
+        assertEquals(0.0, match.getStdDiff(), 1e-6);
+        assertEquals(2.0, match.getMae(), 1e-6);
+        assertEquals(2.0, match.getRmse(), 1e-6);
+    }
 }

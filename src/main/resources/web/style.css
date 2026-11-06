@@ -568,6 +568,109 @@ body {
     line-height: 1.4;
 }
 
+.warning-msg {
+    margin-top: 8px;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+    font-size: 0.75rem;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    line-height: 1.35;
+}
+
+/* Trip KPI Executive Summary Banner */
+.kpi-summary-container {
+    margin-top: 22px;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    border-radius: var(--radius-lg);
+    padding: 18px 22px;
+    color: #f8fafc;
+    box-shadow: var(--shadow-md);
+}
+
+.kpi-banner-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.kpi-banner-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #f8fafc;
+}
+
+.kpi-banner-sub {
+    font-size: 0.76rem;
+    color: #38bdf8;
+    font-weight: 600;
+}
+
+.kpi-banner-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+}
+
+.kpi-card {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.kpi-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #94a3b8;
+    font-weight: 600;
+}
+
+.kpi-value {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.kpi-sub {
+    font-size: 0.74rem;
+    color: #cbd5e1;
+}
+
+.chart-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn-chart-export {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    font-size: 0.74rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.btn-chart-export:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+    border-color: #94a3b8;
+}
+
 .hidden {
     display: none !important;
 }

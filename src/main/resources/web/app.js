@@ -67,6 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSubToggles();
     initGlobalButtons();
     initEmptyCharts();
+    initChartPngExportButtons();
     initExportSystem();
 });
 
@@ -298,6 +299,28 @@ function setVehicleDynamicsSuccess(displayFilename, velData, accData) {
         spanElem.textContent = `${minTime} → ${maxTime}`;
     }
 
+    const meanElem = document.getElementById('mean-vehicle_dynamics');
+    if (meanElem) {
+        if (velData && velData.success && velData.meanValue !== undefined && velData.meanValue !== null) {
+            const sd = velData.stdDevValue !== undefined && velData.stdDevValue !== null ? ` ± ${velData.stdDevValue.toFixed(1)}` : '';
+            meanElem.textContent = `${velData.meanValue.toFixed(1)}${sd} km/h`;
+        } else {
+            meanElem.textContent = '-';
+        }
+    }
+
+    const warnBox = document.getElementById('warn-vehicle_dynamics');
+    if (warnBox) {
+        const warns = [...(velData?.warnings || []), ...(accData?.warnings || [])];
+        if (warns.length > 0) {
+            warnBox.classList.remove('hidden');
+            warnBox.innerHTML = warns.slice(0, 2).join('<br>');
+        } else {
+            warnBox.classList.add('hidden');
+            warnBox.innerHTML = '';
+        }
+    }
+
     updateUploadCountBadge();
 }
 
@@ -323,6 +346,11 @@ function removeVehicleDynamics() {
     if (errorBox) {
         errorBox.classList.add('hidden');
         errorBox.innerHTML = '';
+    }
+    const warnBox = document.getElementById('warn-vehicle_dynamics');
+    if (warnBox) {
+        warnBox.classList.add('hidden');
+        warnBox.innerHTML = '';
     }
 
     updateUploadCountBadge();
@@ -445,6 +473,11 @@ function removeFile(sensorType) {
         errorBox.classList.add('hidden');
         errorBox.innerHTML = '';
     }
+    const warnBox = document.getElementById(`warn-${sensorType}`);
+    if (warnBox) {
+        warnBox.classList.add('hidden');
+        warnBox.innerHTML = '';
+    }
 
     updateUploadCountBadge();
     updateAllVisualizations();
@@ -492,6 +525,27 @@ function setCardSuccess(sensorType, data) {
         const startTime = formatShortTime(data.minFormattedTime);
         const endTime = formatShortTime(data.maxFormattedTime);
         document.getElementById(`timespan-${sensorType}`).textContent = `${startTime} → ${endTime}`;
+
+        const meanEl = document.getElementById(`mean-${sensorType}`);
+        if (meanEl) {
+            if (data.meanValue !== undefined && data.meanValue !== null) {
+                const sd = data.stdDevValue !== undefined && data.stdDevValue !== null ? ` ± ${data.stdDevValue.toFixed(1)}` : '';
+                meanEl.textContent = `${data.meanValue.toFixed(1)}${sd} ${data.unit}`;
+            } else {
+                meanEl.textContent = '-';
+            }
+        }
+    }
+
+    const warnBox = document.getElementById(`warn-${sensorType}`);
+    if (warnBox) {
+        if (data.warnings && data.warnings.length > 0) {
+            warnBox.classList.remove('hidden');
+            warnBox.innerHTML = data.warnings.slice(0, 2).join('<br>');
+        } else {
+            warnBox.classList.add('hidden');
+            warnBox.innerHTML = '';
+        }
     }
 
     updateUploadCountBadge();
@@ -773,6 +827,7 @@ function initEmptyCharts() {
 }
 
 function updateAllVisualizations() {
+    updateTripKpiBanner();
     updateChartHeartRate();
     updateChartVelocity();
     updateChartAcceleration();
@@ -783,6 +838,148 @@ function updateAllVisualizations() {
     updateChartHrAgreement();
     updateChartGsrRel();
     updateCombinedTimeline();
+}
+
+function updateTripKpiBanner() {
+    const banner = document.getElementById('tripKpiBanner');
+    if (!banner) return;
+
+    const sw = appState.datasets.smartwatch_heart_rate;
+    const chest = appState.datasets.chest_ecg_heart_rate;
+    const vel = appState.datasets.vehicle_velocity;
+    const acc = appState.datasets.vehicle_acceleration;
+    const gsr = appState.datasets.healthypi_gsr;
+
+    const activeList = [sw, chest, vel, acc, gsr].filter(d => d && d.success);
+    if (activeList.length === 0) {
+        banner.classList.add('hidden');
+        return;
+    }
+
+    banner.classList.remove('hidden');
+    const activeLabel = document.getElementById('kpiActiveStreamsLabel');
+    if (activeLabel) {
+        const totalPts = activeList.reduce((s, d) => s + (d.validDataPointsCount || 0), 0);
+        activeLabel.textContent = `${activeList.length} Active Sensor Streams • ${totalPts.toLocaleString()} Calibrated Observations`;
+    }
+
+    // 1. Trip Duration & Span
+    let minEpoch = Infinity;
+    let maxEpoch = -Infinity;
+    activeList.forEach(d => {
+        if (d.minEpochMillis !== null && d.minEpochMillis < minEpoch) minEpoch = d.minEpochMillis;
+        if (d.maxEpochMillis !== null && d.maxEpochMillis > maxEpoch) maxEpoch = d.maxEpochMillis;
+    });
+    const durEl = document.getElementById('kpiDurationVal');
+    const spanSubEl = document.getElementById('kpiSpanSub');
+    if (durEl && spanSubEl && minEpoch < maxEpoch) {
+        const totalSec = Math.round((maxEpoch - minEpoch) / 1000);
+        const mins = Math.floor(totalSec / 60);
+        const secs = totalSec % 60;
+        durEl.textContent = `${mins}m ${secs}s (${totalSec.toLocaleString()}s)`;
+        spanSubEl.textContent = `${formatEpochTicks(minEpoch)} → ${formatEpochTicks(maxEpoch)} UTC`;
+    }
+
+    // 2. Cardiac Response (HR)
+    const hrValEl = document.getElementById('kpiHrVal');
+    const hrSubEl = document.getElementById('kpiHrSub');
+    if (hrValEl && hrSubEl) {
+        const primaryHr = chest || sw;
+        if (primaryHr && primaryHr.dataPoints.length > 0) {
+            const meanHr = primaryHr.meanValue ?? (primaryHr.dataPoints.reduce((a, p) => a + p.value, 0) / primaryHr.dataPoints.length);
+            hrValEl.textContent = `${meanHr.toFixed(1)} BPM avg (Max ${primaryHr.maxValue.toFixed(0)})`;
+            if (sw && chest) {
+                const agree = exactMatchStreams(chest, sw);
+                if (agree.sufficient) {
+                    const avgDiff = agree.points.reduce((a, p) => a + (p.y - p.x), 0) / agree.count;
+                    hrSubEl.textContent = `Watch vs Chest Bias: ${avgDiff >= 0 ? '+' : ''}${avgDiff.toFixed(2)} BPM (${agree.count.toLocaleString()}s)`;
+                } else {
+                    hrSubEl.textContent = `Watch Mean: ${(sw.meanValue || 0).toFixed(1)} BPM • Chest: ${(chest.meanValue || 0).toFixed(1)} BPM`;
+                }
+            } else {
+                hrSubEl.textContent = `${primaryHr.displayName || 'Heart Rate'} (${primaryHr.validDataPointsCount.toLocaleString()} pts)`;
+            }
+        } else {
+            hrValEl.textContent = '-';
+            hrSubEl.textContent = 'No HR stream active';
+        }
+    }
+
+    // 3. Speed & Mobility Profile
+    const velValEl = document.getElementById('kpiVelVal');
+    const velSubEl = document.getElementById('kpiVelSub');
+    if (velValEl && velSubEl) {
+        if (vel && vel.dataPoints.length > 0) {
+            const meanVel = vel.meanValue ?? (vel.dataPoints.reduce((a, p) => a + p.value, 0) / vel.dataPoints.length);
+            const movingPts = vel.dataPoints.filter(p => p.value > 1.0).length;
+            const movingPct = ((movingPts / vel.dataPoints.length) * 100).toFixed(1);
+            velValEl.textContent = `${meanVel.toFixed(1)} km/h avg (Peak ${vel.maxValue.toFixed(1)})`;
+            velSubEl.textContent = `Moving: ${movingPct}% (${movingPts.toLocaleString()}s) • Idle: ${(100 - parseFloat(movingPct)).toFixed(1)}%`;
+        } else {
+            velValEl.textContent = '-';
+            velSubEl.textContent = 'No velocity stream active';
+        }
+    }
+
+    // 4. Kinematic Events (Braking & Accel)
+    const dynValEl = document.getElementById('kpiDynVal');
+    const dynSubEl = document.getElementById('kpiDynSub');
+    if (dynValEl && dynSubEl) {
+        if (acc && acc.dataPoints.length > 0) {
+            const hardBrakes = acc.dataPoints.filter(p => p.value <= -2.0).length;
+            const rapidAccels = acc.dataPoints.filter(p => p.value >= 2.0).length;
+            dynValEl.textContent = `${hardBrakes} Brakes • ${rapidAccels} Surge`;
+            dynSubEl.textContent = `Peak Brake: ${acc.minValue.toFixed(2)} m/s² • Peak Accel: +${acc.maxValue.toFixed(2)} m/s²`;
+        } else {
+            dynValEl.textContent = '-';
+            dynSubEl.textContent = 'No acceleration stream active';
+        }
+    }
+
+    // 5. Electrodermal Arousal (GSR)
+    const gsrValEl = document.getElementById('kpiGsrVal');
+    const gsrSubEl = document.getElementById('kpiGsrSub');
+    if (gsrValEl && gsrSubEl) {
+        if (gsr && gsr.dataPoints.length > 0) {
+            const meanGsr = gsr.meanValue ?? (gsr.dataPoints.reduce((a, p) => a + p.value, 0) / gsr.dataPoints.length);
+            const stdGsr = gsr.stdDevValue ?? Math.sqrt(gsr.dataPoints.reduce((a, p) => a + Math.pow(p.value - meanGsr, 2), 0) / gsr.dataPoints.length);
+            const threshold = meanGsr + 2 * stdGsr;
+            const arousalSpikes = gsr.dataPoints.filter(p => Math.abs(p.value - meanGsr) > 2 * stdGsr).length;
+            gsrValEl.textContent = `${arousalSpikes} Phasic Peaks (>2σ)`;
+            gsrSubEl.textContent = `SD: ±${stdGsr.toFixed(1)} ADC (${gsr.validDataPointsCount.toLocaleString()} synced 1-Hz pts)`;
+        } else {
+            gsrValEl.textContent = '-';
+            gsrSubEl.textContent = 'No GSR stream active';
+        }
+    }
+}
+
+function initChartPngExportButtons() {
+    document.querySelectorAll('.btn-chart-export').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const chartId = btn.getAttribute('data-export-chart');
+            if (!chartId) return;
+            const canvas = document.getElementById(chartId);
+            if (!canvas || canvas.style.display === 'none') {
+                alert('Please load or upload sensor data into this chart before saving a PNG snapshot.');
+                return;
+            }
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = canvas.width;
+            exportCanvas.height = canvas.height;
+            const ctx = exportCanvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+            ctx.drawImage(canvas, 0, 0);
+
+            const link = document.createElement('a');
+            link.download = `${chartId}_snapshot.png`;
+            link.href = exportCanvas.toDataURL('image/png', 1.0);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    });
 }
 
 function resizeAllCharts() {

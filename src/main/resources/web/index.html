@@ -105,10 +105,12 @@
                         <div class="file-stats-grid">
                             <div class="stat-item"><span class="stat-label">Records</span><span class="stat-val" id="count-smartwatch_heart_rate">0</span></div>
                             <div class="stat-item"><span class="stat-label">Min &bull; Max</span><span class="stat-val" id="range-smartwatch_heart_rate">-</span></div>
+                            <div class="stat-item span-2"><span class="stat-label">Mean &plusmn; SD</span><span class="stat-val text-xs" id="mean-smartwatch_heart_rate">-</span></div>
                             <div class="stat-item span-2"><span class="stat-label">Time Span (UTC)</span><span class="stat-val text-xs" id="timespan-smartwatch_heart_rate">-</span></div>
                         </div>
                     </div>
 
+                    <div class="warning-msg hidden" id="warn-smartwatch_heart_rate"></div>
                     <div class="error-msg hidden" id="error-smartwatch_heart_rate"></div>
                 </div>
 
@@ -146,10 +148,12 @@
                         <div class="file-stats-grid">
                             <div class="stat-item"><span class="stat-label">Records</span><span class="stat-val" id="count-chest_ecg_heart_rate">0</span></div>
                             <div class="stat-item"><span class="stat-label">Min &bull; Max</span><span class="stat-val" id="range-chest_ecg_heart_rate">-</span></div>
+                            <div class="stat-item span-2"><span class="stat-label">Mean &plusmn; SD</span><span class="stat-val text-xs" id="mean-chest_ecg_heart_rate">-</span></div>
                             <div class="stat-item span-2"><span class="stat-label">Time Span (UTC)</span><span class="stat-val text-xs" id="timespan-chest_ecg_heart_rate">-</span></div>
                         </div>
                     </div>
 
+                    <div class="warning-msg hidden" id="warn-chest_ecg_heart_rate"></div>
                     <div class="error-msg hidden" id="error-chest_ecg_heart_rate"></div>
                 </div>
 
@@ -188,10 +192,12 @@
                             <div class="stat-item"><span class="stat-label">Records</span><span class="stat-val" id="count-vehicle_dynamics">0</span></div>
                             <div class="stat-item"><span class="stat-label">Speed Range</span><span class="stat-val" id="range-speed-vehicle_dynamics">-</span></div>
                             <div class="stat-item"><span class="stat-label">Accel Range</span><span class="stat-val" id="range-accel-vehicle_dynamics">-</span></div>
+                            <div class="stat-item"><span class="stat-label">Mean Speed</span><span class="stat-val text-xs" id="mean-vehicle_dynamics">-</span></div>
                             <div class="stat-item span-2"><span class="stat-label">Time Span (UTC)</span><span class="stat-val text-xs" id="timespan-vehicle_dynamics">-</span></div>
                         </div>
                     </div>
 
+                    <div class="warning-msg hidden" id="warn-vehicle_dynamics"></div>
                     <div class="error-msg hidden" id="error-vehicle_dynamics"></div>
                 </div>
 
@@ -229,11 +235,48 @@
                         <div class="file-stats-grid">
                             <div class="stat-item"><span class="stat-label">1-Hz Points</span><span class="stat-val" id="count-healthypi_gsr">0</span></div>
                             <div class="stat-item"><span class="stat-label">Min &bull; Max</span><span class="stat-val" id="range-healthypi_gsr">-</span></div>
+                            <div class="stat-item span-2"><span class="stat-label">Mean &plusmn; SD</span><span class="stat-val text-xs" id="mean-healthypi_gsr">-</span></div>
                             <div class="stat-item span-2"><span class="stat-label">Time Span (UTC)</span><span class="stat-val text-xs" id="timespan-healthypi_gsr">-</span></div>
                         </div>
                     </div>
 
+                    <div class="warning-msg hidden" id="warn-healthypi_gsr"></div>
                     <div class="error-msg hidden" id="error-healthypi_gsr"></div>
+                </div>
+            </div>
+
+            <!-- Trip Executive Summary & Driving Dynamics KPI Banner -->
+            <div class="kpi-summary-container hidden" id="tripKpiBanner">
+                <div class="kpi-banner-header">
+                    <span class="kpi-banner-title">Trip Telemetry &amp; Physiological Executive Summary</span>
+                    <span class="kpi-banner-sub" id="kpiActiveStreamsLabel">Real-time multi-modal summary</span>
+                </div>
+                <div class="kpi-banner-grid">
+                    <div class="kpi-card">
+                        <span class="kpi-label">Synchronized Span</span>
+                        <span class="kpi-value" id="kpiDurationVal">-</span>
+                        <span class="kpi-sub" id="kpiSpanSub">Awaiting streams</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Cardiac Response (HR)</span>
+                        <span class="kpi-value" id="kpiHrVal">-</span>
+                        <span class="kpi-sub" id="kpiHrSub">No HR stream active</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Speed &amp; Mobility Profile</span>
+                        <span class="kpi-value" id="kpiVelVal">-</span>
+                        <span class="kpi-sub" id="kpiVelSub">No velocity stream active</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Kinematic Events (|a| &gt; 2 m/s²)</span>
+                        <span class="kpi-value" id="kpiDynVal">-</span>
+                        <span class="kpi-sub" id="kpiDynSub">No acceleration stream active</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Electrodermal Arousal (GSR)</span>
+                        <span class="kpi-value" id="kpiGsrVal">-</span>
+                        <span class="kpi-sub" id="kpiGsrSub">No GSR stream active</span>
+                    </div>
                 </div>
             </div>
         </section>
@@ -260,6 +303,7 @@
                     <div class="chart-legend-custom" id="hrLegend">
                         <span class="legend-chip chip-sw hidden" id="chipSw"><span class="chip-color color-sw"></span> Smartwatch HR</span>
                         <span class="legend-chip chip-chest hidden" id="chipChest"><span class="chip-color color-chest"></span> Chest ECG HR</span>
+                        <button type="button" class="btn-chart-export" data-export-chart="chartHeartRate" title="Save chart as high-res PNG">Save PNG</button>
                     </div>
                 </div>
 
@@ -285,8 +329,11 @@
                             </div>
                             <p class="chart-subtitle">Speed profile (km/h) across trip duration</p>
                         </div>
-                        <div class="stat-pill-inline" id="velSummaryPill" style="display:none;">
-                            Max: <strong id="velMaxVal">-</strong> km/h
+                        <div class="chart-header-actions">
+                            <div class="stat-pill-inline" id="velSummaryPill" style="display:none;">
+                                Max: <strong id="velMaxVal">-</strong> km/h
+                            </div>
+                            <button type="button" class="btn-chart-export" data-export-chart="chartVelocity" title="Save chart as high-res PNG">Save PNG</button>
                         </div>
                     </div>
                     <div class="chart-wrapper">
@@ -309,8 +356,11 @@
                             </div>
                             <p class="chart-subtitle">Acceleration (+) &amp; Deceleration/Braking (-) in m/s²</p>
                         </div>
-                        <div class="stat-pill-inline" id="accSummaryPill" style="display:none;">
-                            Zero-Line Baseline Included
+                        <div class="chart-header-actions">
+                            <div class="stat-pill-inline" id="accSummaryPill" style="display:none;">
+                                Zero-Line Baseline Included
+                            </div>
+                            <button type="button" class="btn-chart-export" data-export-chart="chartAcceleration" title="Save chart as high-res PNG">Save PNG</button>
                         </div>
                     </div>
                     <div class="chart-wrapper">
@@ -334,8 +384,11 @@
                         </div>
                         <p class="chart-subtitle">Detrended phasic electrodermal activity (sympathetic arousal variations across trip duration)</p>
                     </div>
-                    <div class="stat-pill-inline" id="gsrSummaryPill" style="display:none;">
-                        1-Hz Synchronized Stream (<strong id="gsrPtsVal">-</strong> pts)
+                    <div class="chart-header-actions">
+                        <div class="stat-pill-inline" id="gsrSummaryPill" style="display:none;">
+                            1-Hz Synchronized Stream (<strong id="gsrPtsVal">-</strong> pts)
+                        </div>
+                        <button type="button" class="btn-chart-export" data-export-chart="chartGsr" title="Save chart as high-res PNG">Save PNG</button>
                     </div>
                 </div>
                 <div class="chart-wrapper">

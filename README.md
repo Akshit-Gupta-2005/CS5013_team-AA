@@ -123,6 +123,8 @@ doxygen Doxyfile
 | `/api/sample-data/{name}` | `GET` | Fetch content of a sample CSV fixture | Path parameter | Raw CSV text |
 | `/api/export/master` | `POST` | Export synchronized master matrix | JSON `{ datasets: { ... } }` | Synchronized CSV download |
 | `/api/export/sensor` | `POST` | Export processed sensor series | JSON `SensorParseResult` | Filtered CSV download |
+| `/api/export/matched` | `POST` | Export exact-matched pair series with Pearson $r$ & OLS fit | JSON `MatchResult` or `{ seriesX, seriesY, labelX, labelY }` | Matched pair CSV download |
+| `/api/export/agreement` | `POST` | Export dual-sensor agreement with Bland-Altman stats | JSON `MatchResult` or `{ seriesX, seriesY, labelX, labelY }` | Agreement CSV download |
 
 ---
 
@@ -137,7 +139,7 @@ doxygen Doxyfile
 ```powershell
 .\mvnw.cmd test
 ```
-All 18 automated unit tests covering parser validation, multi-dialect timestamp normalization, exact matching edge cases, and data export formatting will execute.
+All 20 automated unit tests covering parser validation, statistical moments (`meanValue`, `stdDevValue`, `skippedRowsCount`), multi-dialect timestamp normalization, exact matching correlation/Bland-Altman metrics, and data export formatting will execute.
 
 ### Step 2: Launch the Web Server
 ```powershell

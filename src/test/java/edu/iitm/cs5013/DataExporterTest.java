@@ -85,16 +85,19 @@ public class DataExporterTest {
         String matchedCsv = DataExporter.toMatchedCsv(match);
         assertNotNull(matchedCsv);
         assertTrue(matchedCsv.contains("# Total Matched Synchronized Points: 3"));
+        assertTrue(matchedCsv.contains("# Pearson Correlation (r): 1.0000 | Linear Fit: y = 1.0000x + 50.0000"));
         assertTrue(matchedCsv.contains("20.0000,70.0000"));
     }
 
     @Test
-    @DisplayName("Should export sensor agreement CSV with calculated difference delta")
+    @DisplayName("Should export sensor agreement CSV with calculated difference delta and Bland-Altman summary header")
     void testToAgreementCsv() {
         String chestCsv = "timestamp,ecg_hr\n" +
-                "2026-10-11T10:00:00Z,75.0\n";
+                "2026-10-11T10:00:00Z,75.0\n" +
+                "2026-10-11T10:00:01Z,80.0\n";
         String swCsv = "timestamp,heart_rate\n" +
-                "2026-10-11T10:00:00Z,78.5\n";
+                "2026-10-11T10:00:00Z,78.5\n" +
+                "2026-10-11T10:00:01Z,83.5\n";
 
         SensorParseResult chest = CsvSensorParser.parse(chestCsv, SensorType.CHEST_ECG_HEART_RATE, "chest.csv");
         SensorParseResult sw = CsvSensorParser.parse(swCsv, SensorType.SMARTWATCH_HEART_RATE, "sw.csv");
@@ -103,6 +106,7 @@ public class DataExporterTest {
         String agreementCsv = DataExporter.toAgreementCsv(match);
 
         assertNotNull(agreementCsv);
+        assertTrue(agreementCsv.contains("# Mean Bias (Watch - Chest): 3.50 BPM | MAE: 3.50 BPM | RMSE: 3.50 BPM"));
         assertTrue(agreementCsv.contains("diff_smartwatch_minus_chest_bpm"));
         assertTrue(agreementCsv.contains("75.00,78.50,3.50"));
     }
